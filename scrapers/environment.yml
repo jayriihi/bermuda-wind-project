@@ -1,0 +1,16 @@
+name: scrapers_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9.*
+  - pip
+  - pytesseract
+  - requests
+  - pillow
+  - opencv
+  - beautifulsoup4
+  - gspread
+  - oauth2client
+  - pytz
+
