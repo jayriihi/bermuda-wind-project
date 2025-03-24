@@ -3,6 +3,7 @@ from flask import render_template, request, session, jsonify , Flask, redirect, 
 from app.modules import wind_data_functionsc, tide_now, sesh_tide
 from app import app
 from datetime import datetime, timedelta
+from collections import Counter
 #import pandas as pd
 #import json
 
@@ -12,7 +13,7 @@ from datetime import datetime, timedelta
 @app.route("/home")
 def homepage():
     # Simulate fetched data (Temporary flag for testing)
-    force_error = False
+    force_error = True
       # Set this to True to simulate repeated data error
 
     if force_error:
@@ -23,7 +24,15 @@ def homepage():
     avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series = wind_data_functionsc.pearl_1hr_quik()
 
     # Check for Crescent outage (repeated data indicates an outage)
-    is_crescent_valid = len(set(wind_spd_series)) > 1  # Crescent data is valid if there's variation
+    '''is_crescent_valid = len(set(wind_spd_series)) > 1  # Crescent data is valid if there's variation'''
+    #New outage detection if wspd appear 3x within last 5 readings it fails (added Mar 13 25)
+    window_size = 5  # Checking the last 5 readings
+    wind_speeds = wind_spd_series[-window_size:]  # Get last 5 readings
+    counted = Counter(wind_speeds)  # Count occurrences of each speed
+    most_common_count = max(counted.values())  # Get the highest occurrence
+
+    is_crescent_valid = most_common_count < 3  # If any value appears 3+ times, switch to error_2
+
     if not is_crescent_valid:
         print("Crescent data invalid. Redirecting to error_2.")
         return redirect(url_for('error_2'))
@@ -33,10 +42,6 @@ def homepage():
     wind_max = int(round(wind_max, 0))
     wind_min = int(round(wind_min, 0))
     avg_wind_dir = int(round(avg_wind_dir, 0))
-
-    print("Checking for repeated data in wind speed series...")
-    print(f"Wind Speed Series: {wind_spd_series}")
-    print(f"Unique Values in Wind Speed Series: {set(wind_spd_series)}")
 
     # Fetch tide data
     flow_state_beg, prev_peak_time, prev_peak_state, prev_peak_ht, next_peak_time, next_peak_state, next_peak_ht = tide_now.get_tide_data_for_now()
@@ -130,19 +135,11 @@ def wind():
     wind_max = int(round(wind_max, 0))
     wind_min = int(round(wind_min, 0))
     avg_wind_dir = int(round(avg_wind_dir, 0))
-
-     # Check if the data is flatlined (no variation in wind speed)
-    is_crescent_down = len(set(wind_spd_series)) <= 1  # All values are the same or no data
-
+    #print("Final wind speed data for session chart:", wind_spd_series)
 
     flow_state_beg, flow_state_end , prev_peak_time, prev_peak_state, next_peak_time, next_peak_state = sesh_tide.get_tide_data_for_session(session['sessiondatetime'],  session['duration'])
-    
 
-  
-
-    #wind = get_sesh_wind(datetime.date(2022,5,3), datetime.time(12,00), timedelta(hours=+1, minutes=+0))
-    #return render_template('wind.html', value_avg = avg_wind_spd, value_max = wind_max, value_min = wind_min,value_date = sesh_start_date_str, value_time = sesh_start_time_str, value_hours = h, value_minutes = m, value_avg_n_wind_dir = avg_wind_dir)
-    return render_template('wind.html', value_avg = avg_wind_spd, value_max = wind_max, value_min = wind_min,value_date = sesh_start_date_str, value_time = sesh_start_time_str, value_hours = h, value_minutes = m, value_avg_wind_dir = avg_wind_dir, labels = date_time_index_series_str , values = wind_spd_series, flow_state_beg = flow_state_beg, flow_state_end = flow_state_end, prev_peak_time = prev_peak_time, prev_peak_state = prev_peak_state, next_peak_time = next_peak_time, next_peak_state = next_peak_state, is_crescent_down = is_crescent_down)
+    return render_template('wind.html', value_avg = avg_wind_spd, value_max = wind_max, value_min = wind_min,value_date = sesh_start_date_str, value_time = sesh_start_time_str, value_hours = h, value_minutes = m, value_avg_wind_dir = avg_wind_dir, labels = date_time_index_series_str , values = wind_spd_series, flow_state_beg = flow_state_beg, flow_state_end = flow_state_end, prev_peak_time = prev_peak_time, prev_peak_state = prev_peak_state, next_peak_time = next_peak_time, next_peak_state = next_peak_state)
 
     #value_avg = wind[6], value_max = wind[7], value_min = wind[8],value_date = wind[4], value_time = wind[5], value_hours = wind[2], value_minutes = wind[3], value_avg_n_wind_dir = wind[9])
 

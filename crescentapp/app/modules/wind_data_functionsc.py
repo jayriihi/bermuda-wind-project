@@ -4,6 +4,7 @@ import pandas as pd
 import datetime as dt
 from datetime import timedelta, datetime
 import pytz
+from collections import Counter
 
 # Define timezones globally
 bda_tz = pytz.timezone('Atlantic/Bermuda')
@@ -99,7 +100,7 @@ def fetch_pred_cres_data(string_start_time=None, string_end_time=None):
     try:
         # Fetch data from pred_cres
         df = pd.read_csv(gsheet_url, skiprows=3, names=["Date/Time", "wind_spd", "wind_max", "wind_dir"])
-        print("Fixed Columns:", df.columns.tolist())
+        #print("Fixed Columns:", df.columns.tolist())
 
     except Exception as e:
         print(f"Error fetching pred_cres data: {e}")
@@ -115,9 +116,22 @@ def fetch_pred_cres_data(string_start_time=None, string_end_time=None):
     }, inplace=True)
     df.index = pd.to_datetime(df.index)
 
-    # Extract the session data using string_start_time and string_end_time
+    '''# Extract the session data using string_start_time and string_end_time
     sesh = df.sort_index().loc[string_start_time:string_end_time]
-    #print("Data Frame for Session:", sesh)
+    print("Data Frame for Session:", sesh)'''
+    start_time_dt = pd.to_datetime(string_start_time)
+    end_time_dt = pd.to_datetime(string_end_time)
+
+    # Allow some flexibility around the requested times
+    sesh = df[(df.index >= start_time_dt - pd.Timedelta(minutes=5)) & 
+            (df.index <= end_time_dt + pd.Timedelta(minutes=5))]
+    start_time_dt = pd.to_datetime(string_start_time)
+    end_time_dt = pd.to_datetime(string_end_time)
+
+    # ✅ Ensure DataFrame is sorted again after time filtering
+    sesh = sesh.sort_index()
+
+
 
     if sesh.empty:
         print(f"No data available for the time range {string_start_time} to {string_end_time}")
@@ -130,6 +144,7 @@ def fetch_pred_cres_data(string_start_time=None, string_end_time=None):
     date_time_index_series = list(sesh.index)
     date_time_index_series_str = [t.strftime("%H:%M") for t in date_time_index_series]
     wind_spd_series = list(sesh["wind_spd"])
+    #print("Full pred_cres dataset before filtering:", df)
 
     return avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series
 
@@ -182,14 +197,26 @@ def get_sesh_wind(datetimelocal_str, duration_str):
     # Try retrieving Crescent data first
     avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series = data_frame_set(string_start_time, string_end_time)
 
-    # Check if Crescent data is flatlined or missing
-    is_crescent_down = len(set(wind_spd_series)) <= 1  # All values are the same or no data
+    # New outage detection if wspd appears 3x within last 5 readings it fails (added Mar 13 25)
+    window_size = 5  # Checking the last 5 readings
+    wind_speeds = wind_spd_series[-window_size:]  # Get last 5 readings
+    counted = Counter(wind_speeds)  # Count occurrences of each speed
+    most_common_count = max(counted.values())  # Get the highest occurrence
 
-    if is_crescent_down:
+    is_crescent_valid = most_common_count < 3  # If any value appears 3+ times, switch to pred_cres
+
+    # Corrected print statement
+    print("Using data source:", "Predicted Crescent" if not is_crescent_valid else "Crescent")
+    
+
+
+    if not is_crescent_valid:  # Fix typo and use correct logic
         print("Crescent data appears to be down. Fetching predicted Crescent data...")
         avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series = fetch_pred_cres_data(string_start_time, string_end_time)
+    print("Fetched predicted Crescent data:", wind_spd_series)
 
     return string_start_time, string_end_time, h, m, sesh_start_date_str, sesh_start_time_str, avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series
+
 
     ''' have added new function above which switches to pred_cres if cres is down
 def get_sesh_wind(datetimelocal_str,duration_str):
