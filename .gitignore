@@ -51,3 +51,7 @@ creds.json
 images/
 *.png
 
+# Ignore Garmin SDK
+health_data/FitSDKRelease_21.158.00/
+
+
