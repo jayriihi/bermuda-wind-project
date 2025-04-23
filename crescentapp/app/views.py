@@ -1,6 +1,6 @@
 import requests
 from flask import render_template, request, session, jsonify , Flask, redirect, url_for
-from app.modules import wind_data_functionsc, tide_now, sesh_tide
+from app.modules import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
 from app import app
 from datetime import datetime, timedelta
 from collections import Counter
@@ -241,11 +241,6 @@ def wind_direction():
     # Render the template with these changes
     return render_template('wind_clocks.html', hour=hour_change, three_hour=three_hour_change, six_hour=six_hour_change)
 
-
-
-
-
-
 @app.route('/tidal_difference')
 def tidal_difference():
     # Calculate today's date for the current date
@@ -256,12 +251,24 @@ def tidal_difference():
     end_date = today + timedelta(days=1)
     
     # Retrieve tidal flow differences data and high/low tide data from NOAA for the specified time range
-    flow_data_json, hilo_data_json = get_tidal_flow_differences_json(2695540, start_date, end_date)  # Adjusted function call
+    flow_data_json, hilo_data_json = tidal_data_retrieval.get_tidal_flow_differences_json(2695540, start_date, end_date)  # Adjusted function call
     
     # No need to convert JSON to Python objects here as we're directly passing the JSON strings to the frontend
 
     # Pass both JSON strings to the template for rendering
     return render_template('tidal_difference.html', flow_data_json=flow_data_json, hilo_data_json=hilo_data_json)
+
+@app.route("/dual_tide_plot")
+def dual_tide_plot():
+    station_id = 2695540
+    start_date = datetime.now() - timedelta(days=0)
+    end_date = datetime.now() + timedelta(days=3)
+    flow_data_json, hilo_data_json, height_data_json, slope_data_json, thresholds_json, max_slope_json = tidal_data_retrieval.get_dual_tide_plot_json(station_id, start_date, end_date)
+    return render_template("dual_tide_plot.html", flow_data_json=flow_data_json, hilo_data_json=hilo_data_json, height_data_json=height_data_json,
+    slope_data_json=slope_data_json,
+    thresholds_json=thresholds_json,
+    max_slope_json=max_slope_json)
+
 
 @app.route('/dewpointplus')
 def dewpoint():

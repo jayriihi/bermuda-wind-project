@@ -51,3 +51,5 @@ creds.json
 images/
 *.png
 
+#garmin fit sdk files
+health_data/FitSDKRelease_21.158.00/
