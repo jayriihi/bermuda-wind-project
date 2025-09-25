@@ -1,0 +1,27 @@
+1
+
+                    Execution started at 20250925.164849         
+
+
+
+                    ---------------------------------------
+                                     SWAN
+                    SIMULATION OF WAVES IN NEAR SHORE AREAS
+                             VERSION NUMBER 41.51               
+                    ---------------------------------------
+
+
+    
+ PROJECT 'T' 'B'
+    
+ MODE STATIONARY
+    
+ SET NAUTICAL
+    
+ CGRID REGULAR 0.0 0.0 0.0 4000.0 4000.0 5 5 CIRCLE 36 0.06 0.5 20
+ Resolution in sigma-space: df/f =  0.1118
+    
+ INPGRID BOTTOM REGULAR 0.0 0.0 0.0 6 6 1000.0 1000.0
+    
+ READINP BOTTOM 1.0 UNIFORM 1000.0
+ ** Severe error     : No value for variable FNAME                                   

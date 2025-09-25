@@ -257,19 +257,30 @@ data_row_add = [now_time_gsheet,recent_ws,recent_mws,recent_wd]
 
 sheet.insert_row(data_row_add,4)
 
-'''# Creating url for windguru get API # initializing string 
-str2hash = (("{}crescent_bermudacrescentstation*").format(now_time))
-#print(("{}crescent_bermudacrescentstation*").format(now_time))
-# encoding Salt using encode() 
-# then sending to md5() 
-result = hashlib.md5(str2hash.encode()) 
-  
-# printing the equivalent hexadecimal value. 
-#print("The hexadecimal equivalent of hash is : ", end ="") 
-#print(result.hexdigest())
+# --- Pred_cresc → Windguru uploader (always pred, never Sheet1) ---
+pred_sheet = client.open("crescent_data").worksheet("pred_cresc")
+row = pred_sheet.row_values(4)   # expected: [timestamp, wind_spd, wind_max, wind_dir]
 
-#print(("windguru.cz/upload/api.php?uid=crescent_bermuda&salt={}&hash={}&wind_avg={}&wind_max={}&wind_direction={}").format(now_time,result.hexdigest(),recent_ws,recent_mws,recent_wd))
+if len(row) >= 4 and all(row[1:4]):
+    windguru_ws  = float(row[1])  # avg (knots)
+    windguru_mws = float(row[2])  # max/gust (knots)
+    windguru_wd  = float(row[3])  # direction (deg)
 
-#send windguru pearl data via get
-URL = ("http://www.windguru.cz/upload/api.php?uid=crescent_bermuda&salt={}&hash={}&wind_avg={}&wind_max={}&wind_direction={}").format(now_time,result.hexdigest(),recent_ws,recent_mws,recent_wd)
-page = requests.get(URL)'''
+    # Build Windguru URL/hash
+    tz = pytz.timezone("America/Halifax")      # Bermuda equivalent
+    now_time = datetime.now(tz).strftime("%Y-%m-%d-%H%M")
+    hash_value = hashlib.md5(f"{now_time}crescent_bermudacrescentstation*".encode()).hexdigest()
+
+    url = (
+        "http://www.windguru.cz/upload/api.php?"
+        f"uid=crescent_bermuda&salt={now_time}&hash={hash_value}&"
+        f"wind_avg={windguru_ws}&wind_max={windguru_mws}&wind_direction={windguru_wd}"
+    )
+
+    try:
+        r = requests.get(url, timeout=10)
+        print(f"[pred→Windguru] avg={windguru_ws} max={windguru_mws} dir={windguru_wd} status={r.status_code}")
+    except Exception as e:
+        print(f"[pred→Windguru] ERROR posting to Windguru: {e}")
+else:
+    print("⚠️ pred_cresc row 4 missing or incomplete; skipping Windguru update.")

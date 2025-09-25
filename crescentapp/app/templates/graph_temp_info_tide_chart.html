@@ -223,31 +223,42 @@
   );
 </script>
 
-<!-- <h1 style="font-size: 40;"> <p>   </p> </h1> -->
-
 
 <!-- now the tide chart code -->
+{% if tide_ok %}
 
-<style>
-  .chartBox {
-    width: 75%;
-    border-radius: 25px;
-    border: solid 3px rgb(12, 6, 193);
-    background: white;
-    margin: auto;
-    margin-bottom: 35px;
-  }
-</style>
+  <style>
+    .chartBox {
+      width: 75%;
+      border-radius: 25px;
+      border: solid 3px rgb(12, 6, 193);
+      background: white;
+      margin: auto;
+      margin-bottom: 35px;
+    }
+  </style>
 
-<div class="container">
-  <div class="chartBox">
-    <canvas id="myChartTide"></canvas>
+  <div class="container">
+    <div class="chartBox">
+      <canvas id="myChartTide"></canvas>
+    </div>
   </div>
-</div>
 
-<div class="container text-center mt-4">
-  <p>Next tide is {{ next_peak_state }} at {{ next_peak_time }}</p>
-</div>
+  <div class="container text-center mt-4">
+    <p>Next tide is {{ next_peak_state }} at {{ next_peak_time }}</p>
+  </div>
+
+  <script>
+    /* your existing tide JS exactly as-is (sunrise/sunset + /data + Chart.js) */
+  </script>
+
+{% else %}
+
+  <div class="container text-center mt-4">
+    <div class="alert alert-warning">⚠️ {{ tide_error_msg or "Tide data temporarily unavailable." }}</div>
+  </div>
+
+{% endif %}
 
 <script>
   // Function to calculate the x-position based on the hour

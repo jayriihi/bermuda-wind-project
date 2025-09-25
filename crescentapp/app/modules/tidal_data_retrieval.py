@@ -157,11 +157,11 @@ def find_forecast_at_times(detailed_predictions, times):
         forecast_tides.append(closest_prediction.iloc[0]['v'])
     return forecast_tides
 
-def get_dual_tide_plot_json(station_id, start_date, end_date):
+def get_dual_tide_plot_json(station_id, buffered_start, buffered_end, start_date, end_date, fixedMaxY=0.35):
     hilo_predictions = fetch_hilo_tide_predictions(station_id, start_date, end_date)
     detailed_predictions = get_detailed_tide_predictions(station_id, start_date, end_date)
 
-    # Existing logic
+    # Flow delta between tide turning points
     intermediate_times = calculate_intermediate_times(hilo_predictions)
     forecast_tides = find_forecast_at_times(detailed_predictions, intermediate_times)
     differences = [forecast_tides[i + 1] - forecast_tides[i] for i in range(len(forecast_tides) - 1)]
@@ -176,46 +176,52 @@ def get_dual_tide_plot_json(station_id, start_date, end_date):
         for t, v in zip(hilo_predictions['t'], hilo_predictions['v'])
     ])
 
-    height_data_json = json.dumps([
-        {"time": t.astimezone(bermuda_tz).isoformat(), "height": v}
-        for t, v in zip(detailed_predictions['t'], detailed_predictions['v'])
-    ])
-
-    # 1. Calculate slope
+    # 1. Slope calculation
     df = detailed_predictions.copy()
     df['slope'] = df['v'].diff() / (15 * 60) * 3600  # m/hr
     df = df.dropna()
     df = assign_normalized_tide_positions(df)
-
-    # Also use for color classification
-    slope_data = df.copy()
-
-    # Determine max slope for y-axis
-    max_slope = abs(df['slope']).max()
-    max_slope_json = json.dumps(max_slope)
-
-    # 2. Classify strength using fixed adaptive thresholds
-
-    thresholds_json = json.dumps(thresholds)
+    df = df.dropna(subset=['normalized_in_tide', 'slope'])
 
 
+    # Ensure comparison datetimes are timezone-aware
+    start_date = bermuda_tz.localize(start_date) if start_date.tzinfo is None else start_date.astimezone(bermuda_tz)
+    end_date = bermuda_tz.localize(end_date) if end_date.tzinfo is None else end_date.astimezone(bermuda_tz)
 
-    slope_data['strength'] = slope_data['slope'].apply(classify_flow_strength)
 
-    # 3. Convert to JSON
-    df = df.dropna(subset=['normalized_in_tide'])
-
-    # Print check
-    print("Thresholds (sorted):", thresholds)
-    print("First 10 slope values:")
-    print(df[['t', 'slope']].head(10))
-
-    sample_classifications = [
-        (s, classify_flow_strength(s)) for s in df['slope'].head(10)
+    # Trim to visible time window **before** generating slope/tide chart data
+    df = df[(df['t'] >= start_date) & (df['t'] <= end_date)]
+    detailed_predictions = detailed_predictions[
+        (detailed_predictions['t'] >= start_date) & (detailed_predictions['t'] <= end_date)
     ]
-    print("Sample classifications (slope, strength):")
-    for s, label in sample_classifications:
-        print(f"  {s:.3f} -> {label}")
+
+    # Interpolate + scale tide height to slope timestamps
+    slope_times = df['t']
+    min_h = detailed_predictions['v'].min()
+    max_h = detailed_predictions['v'].max()
+    flow_range = fixedMaxY
+
+    height_interp = []
+    for t in slope_times:
+        idx = (detailed_predictions['t'] - t).abs().argsort().iloc[0]
+        matched_height = detailed_predictions['v'].iloc[idx]
+        scaled_height = ((matched_height - min_h) / (max_h - min_h) * 2 - 1) * flow_range
+        height_interp.append({
+            "time": t.isoformat(),
+            "height": scaled_height
+        })
+
+    height_data_json = json.dumps(height_interp)
+
+    # Classify strength
+    df['strength'] = df['slope'].apply(classify_flow_strength)
+    thresholds_json = json.dumps(thresholds)
+    max_slope_json = json.dumps(abs(df['slope']).max())
+    # Just before json.dumps...
+    '''
+    print("Remaining NaNs in slope JSON?", df[['t', 'slope', 'normalized_in_tide']].isna().sum())
+    print("Sample row with NaN (if any):", df[df.isna().any(axis=1)].head())'''
+
 
     slope_data_json = json.dumps([
         {
@@ -225,11 +231,16 @@ def get_dual_tide_plot_json(station_id, start_date, end_date):
             "normalized_in_tide": n
         }
         for t, s, n in zip(df['t'], df['slope'], df['normalized_in_tide'])
-
     ])
 
+    # Optional print check
+    print("Thresholds (sorted):", thresholds)
+    print("Sample slope classifications:")
+    for s in df['slope'].head(10):
+        print(f"{s:.3f} → {classify_flow_strength(s)}")
 
     return flow_data_json, hilo_data_json, height_data_json, slope_data_json, thresholds_json, max_slope_json
+
 
 
 

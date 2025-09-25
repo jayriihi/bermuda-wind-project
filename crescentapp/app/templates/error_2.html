@@ -111,20 +111,13 @@ Crescent Error - Pred Cres Displayed
 <div class="periodMenu">
   <div class="container">
     <center>
-    
       <p> Recent winds at <a href="/crescent">Crescent<span class="info">i</span></a></p>
 
-
-      {% if is_modeled %}
-      <div class="notice text-center">
-        <strong>Notice:</strong> Crescent data is unavailable. Displaying modeled data based on NMB station readings.
+      <div class="btn-group my-2">
+        <a href="/graph_1hr" class="btn btn-primary active" aria-current="page">1 hour</a>
+        <a href="/graph_3hr" class="btn btn-primary">3 hours</a>
+        <a href="/graph_8hr" class="btn btn-primary">8 hours</a>
       </div>
-      {% else %}
-      <div class="alert alert-success text-center" style="margin-top: 20px;">
-          <strong>Live Data:</strong> Crescent data is being displayed.
-      </div>
-      {% endif %}
-      
     </center>
   </div>
 </div>

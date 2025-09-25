@@ -3,76 +3,99 @@ from flask import render_template, request, session, jsonify , Flask, redirect, 
 from app.modules import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
 from app import app
 from datetime import datetime, timedelta
-from collections import Counter
+#from collections import Counter
 #import pandas as pd
 #import json
-
-
 
 @app.route("/")
 @app.route("/home")
 def homepage():
-    # Simulate fetched data (Temporary flag for testing)
-    force_error = True
-      # Set this to True to simulate repeated data error
-
+    # --- test switch (leave False in prod) ---
+    force_error = False
     if force_error:
         print("Simulated error: Redirecting to the error page.")
-        return redirect(url_for('error_2'))
+        return redirect(url_for("error_2"))
 
-    # Fetch Crescent wind data
-    avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series = wind_data_functionsc.pearl_1hr_quik()
-
-    # Check for Crescent outage (repeated data indicates an outage)
-    '''is_crescent_valid = len(set(wind_spd_series)) > 1  # Crescent data is valid if there's variation'''
-    #New outage detection if wspd appear 3x within last 5 readings it fails (added Mar 13 25)
-    window_size = 5  # Checking the last 5 readings
-    wind_speeds = wind_spd_series[-window_size:]  # Get last 5 readings
-    counted = Counter(wind_speeds)  # Count occurrences of each speed
-    most_common_count = max(counted.values())  # Get the highest occurrence
-
-    is_crescent_valid = most_common_count < 3  # If any value appears 3+ times, switch to error_2
-
-    if not is_crescent_valid:
-        print("Crescent data invalid. Redirecting to error_2.")
-        return redirect(url_for('error_2'))
-
-    # Round and convert to integers for display
-    avg_wind_spd = round(avg_wind_spd, 1)
-    wind_max = int(round(wind_max, 0))
-    wind_min = int(round(wind_min, 0))
-    avg_wind_dir = int(round(avg_wind_dir, 0))
-
-    # Fetch tide data
-    flow_state_beg, prev_peak_time, prev_peak_state, prev_peak_ht, next_peak_time, next_peak_state, next_peak_ht = tide_now.get_tide_data_for_now()
-
-    # Convert tide state abbreviation to full form
-    tide_state_full = "Low" if next_peak_state == "L" else "High"
-
-    # Convert Timestamp to string and then format time to show only hours and minutes
-    next_peak_time_formatted = next_peak_time.strftime('%H:%M')
-
-    # Render the main page with live Crescent data
-    return render_template(
-        "graph_temp_info_tide_chart.html",
-        labels=date_time_index_series_str,
-        values=wind_spd_series,
-        past_hour_avg_wind_spd=avg_wind_spd,
-        past_hour_avg_wind_min=wind_min,
-        past_hour_avg_wind_max=wind_max,
-        avg_wind_dir=avg_wind_dir,
-        flow_state_beg=flow_state_beg,
-        prev_peak_time=prev_peak_time,
-        prev_peak_state=prev_peak_state,
-        prev_peak_ht=prev_peak_ht,
-        next_peak_time=next_peak_time_formatted,
-        next_peak_state=tide_state_full,
-        next_peak_ht=next_peak_ht,
-        is_modeled=False  # Indicate live data
+    # --- wind: Pearl first, fallback to pred_cresc if stale/failed ---
+    (avg_wind_spd, wind_max, wind_min, avg_wind_dir, labels, series), source_sheet = (
+        wind_data_functionsc.fetch_auto_pearl_then_pred()
     )
 
+    if (avg_wind_spd is None) or (not series):
+        print("Wind fetch failed after fallback. Redirecting to error_2.")
+        return redirect(url_for("error_2"))
 
+    # Round/format for display
+    past_hour_avg_wind_spd = round(avg_wind_spd, 1)
+    past_hour_avg_wind_max = int(round(wind_max))
+    past_hour_avg_wind_min = int(round(wind_min))
+    avg_wind_dir_disp      = int(round(avg_wind_dir))
 
+    # --- tide ---
+
+# --- tide: graceful with optional forced failure ---
+    def _fmt_hhmm(x):
+        try:
+            return x.strftime("%H:%M")
+        except Exception:
+            return "—"
+
+    tide_ok = True
+    tide_error_msg = None
+    force_tide_error = request.args.get("tide_test") == "1"  # e.g., /home?tide_test=1
+
+    try:
+        if force_tide_error:
+            raise RuntimeError("Forced tide failure (testing)")
+
+        (
+            flow_state_beg,
+            prev_peak_time,
+            prev_peak_state,
+            prev_peak_ht,
+            next_peak_time,
+            next_peak_state,
+            next_peak_ht,
+        ) = tide_now.get_tide_data_for_now()
+
+        tide_state_full   = "Low" if next_peak_state == "L" else "High"
+        prev_peak_time_str = _fmt_hhmm(prev_peak_time)
+        next_peak_time_str = _fmt_hhmm(next_peak_time)
+
+    except Exception as e:
+            print(f"[tide] {e}")
+            tide_ok = False
+            tide_error_msg     = "Tide data temporarily unavailable."
+            flow_state_beg     = ""
+            prev_peak_state    = "—"
+            prev_peak_ht       = "—"
+            tide_state_full    = "—"
+            next_peak_ht       = "—"
+            prev_peak_time_str = "—"
+            next_peak_time_str = "—"
+
+        # --- render (still inside homepage) ---
+    return render_template(
+            "graph_temp_info_tide_chart.html",
+            labels=labels,
+            values=series,
+            past_hour_avg_wind_spd=past_hour_avg_wind_spd,
+            past_hour_avg_wind_min=past_hour_avg_wind_min,
+            past_hour_avg_wind_max=past_hour_avg_wind_max,
+            avg_wind_dir=avg_wind_dir_disp,
+            # tide
+            tide_ok=tide_ok,
+            tide_error_msg=tide_error_msg,
+            flow_state_beg=flow_state_beg,
+            prev_peak_time=prev_peak_time_str,
+            prev_peak_state=prev_peak_state,
+            prev_peak_ht=prev_peak_ht,
+            next_peak_time=next_peak_time_str,
+            next_peak_state=tide_state_full,
+            next_peak_ht=next_peak_ht,
+            # wind source badge
+            is_modeled=(source_sheet == "pred_cresc"),
+        )
 
 @app.route("/graph_1hr")
 def graph_1hr():
@@ -261,13 +284,52 @@ def tidal_difference():
 @app.route("/dual_tide_plot")
 def dual_tide_plot():
     station_id = 2695540
-    start_date = datetime.now() - timedelta(days=0)
+    start_date = datetime.now()
+    end_date = datetime.now() + timedelta(days=2)
+    fixedMaxY = 0.35
+
+    flow_data_json, hilo_data_json, height_data_json, slope_data_json, thresholds_json, max_slope_json = (
+        tidal_data_retrieval.get_dual_tide_plot_json(station_id, start_date, end_date, fixedMaxY)
+    )
+
+    return render_template("dual_tide_plot.html",
+        flow_data_json=flow_data_json,
+        hilo_data_json=hilo_data_json,
+        height_data_json=height_data_json,
+        slope_data_json=slope_data_json,
+        thresholds_json=thresholds_json,
+        max_slope_json=max_slope_json
+    )
+
+
+@app.route("/tidal_flow")
+def tidal_flow():
+    station_id = 2695540
+    start_date = datetime.now() - timedelta(days=1)
     end_date = datetime.now() + timedelta(days=3)
-    flow_data_json, hilo_data_json, height_data_json, slope_data_json, thresholds_json, max_slope_json = tidal_data_retrieval.get_dual_tide_plot_json(station_id, start_date, end_date)
-    return render_template("dual_tide_plot.html", flow_data_json=flow_data_json, hilo_data_json=hilo_data_json, height_data_json=height_data_json,
-    slope_data_json=slope_data_json,
-    thresholds_json=thresholds_json,
-    max_slope_json=max_slope_json)
+
+    visible_start = datetime.now()
+    visible_end = visible_start + timedelta(days=3)
+
+    buffer = timedelta(hours=1)
+    buffered_start = start_date - buffer
+    buffered_end = end_date + buffer
+
+    fixedMaxY = 0.35
+
+    flow_data_json, hilo_data_json, height_data_json, slope_data_json, thresholds_json, max_slope_json = (
+        tidal_data_retrieval.get_dual_tide_plot_json(station_id, buffered_start, buffered_end, start_date, end_date, fixedMaxY)
+    )
+
+    return render_template("tidal_flow.html",
+        flow_data_json=flow_data_json,
+        hilo_data_json=hilo_data_json,
+        height_data_json=height_data_json,
+        slope_data_json=slope_data_json,
+        thresholds_json=thresholds_json,
+        max_slope_json=max_slope_json
+    )
+
 
 
 @app.route('/dewpointplus')

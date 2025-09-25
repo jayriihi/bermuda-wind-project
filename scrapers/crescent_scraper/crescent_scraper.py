@@ -281,9 +281,11 @@ if crescent_is_offline:
         print(f"Using pred_cresc data for Windguru: {pred_ws}, {pred_mws}, {pred_wd}")
 
     # 🚨 Ensure Windguru receives pred_cresc values when Crescent is offline
-    windguru_ws = pred_ws if pred_ws is not None else recent_ws
-    windguru_mws = pred_mws if pred_mws is not None else recent_mws
-    windguru_wd = pred_wd if pred_wd is not None else recent_wd
+    # 🚨 Force Windguru to always use pred_cresc values (no Crescent fallback)
+        windguru_ws = pred_ws
+        windguru_mws = pred_mws
+        windguru_wd = pred_wd
+
 
     # 🚨 STILL WRITE CRESCENT DATA TO SHEET1 (duplicate entry) for views.py outage detection
     data_row_add = [now_time_gsheet, recent_ws, recent_mws, recent_wd]
@@ -297,67 +299,15 @@ else:
     data_row_add = [now_time_gsheet, recent_ws, recent_mws, recent_wd]
     sheet.insert_row(data_row_add, 4)  # ✅ Writes only once when Crescent is online.
 
+    '''
     # 🚨 Ensure Windguru receives Crescent values when online
     windguru_ws = recent_ws
     windguru_mws = recent_mws
     windguru_wd = recent_wd
+    '''
 
 # 🚨 Print the final values being sent to Windguru
 print(f"Data being sent to Windguru (Crescent or pred_cresc): Avg Wind Speed: {windguru_ws}, Max Wind Speed: {windguru_mws}, Wind Direction: {windguru_wd}")
-
-
-'''# Function to check if all three rows match recent_ws, recent_mws, recent_wd
-def is_crescent_offline(rows, recent_ws, recent_mws, recent_wd):
-    return all(
-        len(row) >= 4 and
-        float(row[1]) == recent_ws and
-        float(row[2]) == recent_mws and
-        float(row[3]) == recent_wd
-        for row in rows
-    )
-
-crescent_is_offline = is_crescent_offline(valid_rows, recent_ws, recent_mws, recent_wd)
-
-if crescent_is_offline:
-    print("Crescent data appears to be offline. Fetching pred_cresc data.")
-
-    # Access pred_cres sheet and fetch the latest row
-    pred_sheet = client.open("crescent_data").worksheet("pred_cresc")
-    latest_pred_row = pred_sheet.row_values(4)
-
-    # Use pred_cresc data for Windguru API ONLY
-    pred_ws = float(latest_pred_row[1])
-    pred_mws = float(latest_pred_row[2])
-    pred_wd = float(latest_pred_row[3])
-
-    print(f"Using pred_cresc data for Windguru: {pred_ws}, {pred_mws}, {pred_wd}")
-
-    # 🚨 Ensure Windguru receives pred_cresc values when Crescent is offline
-    windguru_ws = pred_ws
-    windguru_mws = pred_mws
-    windguru_wd = pred_wd
-
-    # 🚨 STILL WRITE CRESCENT DATA TO SHEET1 (duplicate entry) for views.py outage detection
-    data_row_add = [now_time_gsheet, recent_ws, recent_mws, recent_wd]
-    sheet.insert_row(data_row_add, 4)  # ✅ Ensures repeated data is written for `views.py` to detect
-    print("Offline Crescent data written to Sheet1 for redundancy.")
-    
-else:
-    print("Crescent data is online. Storing in Crescent sheet.")
-
-    # **Only insert real Crescent data into Google Sheets**
-    data_row_add = [now_time_gsheet, recent_ws, recent_mws, recent_wd]
-    sheet.insert_row(data_row_add, 4)  # ✅ Writes only once when Crescent is online.
-
-    # 🚨 Ensure Windguru receives Crescent values when online
-    windguru_ws = recent_ws
-    windguru_mws = recent_mws
-    windguru_wd = recent_wd
-
-# 🚨 Print the final values being sent to Windguru
-print(f"Data being sent to Windguru (Crescent or pred_cresc): Avg Wind Speed: {windguru_ws}, Max Wind Speed: {windguru_mws}, Wind Direction: {windguru_wd}")
-'''
-
 
 # Creating URL for Windguru API
 str2hash = f"{now_time}crescent_bermudacrescentstation*"
