@@ -251,20 +251,33 @@ def fetch_sheet_window_df(string_start_time=None, string_end_time=None, sheet_na
               (df.index <= end_dt   + pd.Timedelta(minutes=5))].copy()
     return sesh.sort_index()
 
-# 3 hour df for wind_dir.html chart
+# 3 hour df for wind_dir.html / wind_dir_vert.html chart
 def wind_dir_3hours():
-    # Use Bermuda time to build the window
+    # Bermuda window
     now_bda = get_timezone_now()
     start = (now_bda - timedelta(hours=3, minutes=5)).strftime("%Y-%m-%d %H:%M")
     end   = now_bda.strftime("%Y-%m-%d %H:%M")
 
     print(f"[wind_dir_3hours] window BDA: {start} → {end}")
 
-    df = fetch_sheet_window_df(start, end, sheet_name="pred_cresc")
+    df = fetch_sheet_window_df(start, end, sheet_name="pred_cresc").sort_index()
     print(f"[wind_dir_3hours] fetched rows: {len(df)}")
     if df.empty:
         print("[wind_dir_3hours] empty slice")
         return [], []
+
+    # keep only rows with a numeric wind_dir
+    df = df[pd.to_numeric(df["wind_dir"], errors="coerce").notna()].copy()
+    df["wind_dir"] = df["wind_dir"].astype(float)
+
+    # timestamps → strict ISO in UTC (…Z) so Chart.js parses reliably
+    labels = [
+        ts.astimezone(pytz.utc).isoformat().replace("+00:00", "Z")
+        for ts in df.index.to_pydatetime()
+    ]
+    wind_dirs = df["wind_dir"].tolist()
+
+    return labels, wind_dirs
 
     # Force numeric ONCE and build a mask so labels & data stay aligned
     wd = pd.to_numeric(df["wind_dir"], errors="coerce")

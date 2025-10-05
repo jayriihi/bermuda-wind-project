@@ -1,108 +1,285 @@
 {% extends "base.html" %}
 {% block content %}
+
 <style>
-  body {
-    background-color: rgb(23, 255, 255) !important;
+  /* ——— Palette ——— */
+  :root{
+    --bg:#edf2f7;                 /* light page */
+    --text:#25344a;               /* page text */
+    --muted:#5e708a;              /* page secondary */
+    --panel:#0f2238;              /* dark card for charts */
+    --panel-text:#e6eef8;         /* text on dark card */
+    --panel-stroke:rgba(255,255,255,.14);
+    --grid:rgba(255,255,255,.08); /* gridlines on dark card */
+    --aqua:#00e1d1;               /* Bermuda-water accent */
+    --page-max:1100px;
+    --gap:12px;
+    --radius:12px;
   }
 
+  /* ---- Top cluster refactor (replaces your old h1/periodMenu/btn-group rules) ---- */
+
+/* Heading */
+h1{
+  margin: 2px 0 2px;
+  font-size: clamp(20px, 2.6vw, 32px);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+h1::after{
+  content:"";
+  display:block;
+  width:68px; height:2px;
+  margin:4px auto 0;
+  background: var(--muted); /* #5e708a */
+  opacity:.7; border-radius:999px;
+}
+
+/* “Recent winds at Crescent” line */
+.periodMenu p{
+  margin: 0 0 2px;
+  line-height: 1.12;
+}
+.periodMenu p a[href="/crescent"]{
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.periodMenu p a[href="/crescent"]:hover{
+  text-decoration: underline;
+}
+
+/* Segmented control */
+.periodMenu .btn-group{ margin: 0 0 4px; }
+
+/* slightly shorter pills */
+.periodMenu .btn{
+  padding: 2px 10px;
+  font-size: .95rem;
+  line-height: 1.12;
+}
+
+/* subtle transitions + clear keyboard focus */
+.periodMenu .btn{
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.periodMenu .btn:focus{
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(94,112,138,.22) inset, 0 0 0 2px rgba(94,112,138,.18);
+}
+/* hint of depth on active */
+.periodMenu .btn-primary.active{
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15);
+}
+
+/* Inactive pills: extra-light */
+.periodMenu .btn-primary{
+  --bs-btn-color: var(--text);
+  --bs-btn-bg: color-mix(in srgb, var(--muted) 8%, white);
+  --bs-btn-border-color: color-mix(in srgb, var(--muted) 28%, white);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--muted) 14%, white);
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--muted) 40%, white);
+
+  /* what Bootstrap uses when a button is .active (pressed/selected) */
+  --bs-btn-active-bg: color-mix(in srgb, var(--muted) 24%, white);
+  --bs-btn-active-border-color: color-mix(in srgb, var(--muted) 50%, white);
+}
+
+/* Selected pill: solid + white text */
+.periodMenu .btn-primary.active,
+.periodMenu .btn-primary[aria-current="page"]{
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--muted);
+  --bs-btn-border-color: var(--muted);
+  --bs-btn-hover-bg: #506076;
+  --bs-btn-hover-border-color: #506076;
+
+  /* CRITICAL for Bootstrap's .active rule */
+  --bs-btn-active-bg: var(--muted);
+  --bs-btn-active-border-color: var(--muted);
+
+  font-weight: 700;
+}
 
 
-  .periodMenu {
-    padding-top: .6pc;
-    color: #0c20d3;
-    font-family: Arial, Helvetica, sans-serif;
-    font-weight: normal;
+/* segment radii */
+.periodMenu .btn-group > .btn{ border-radius: 0; }
+.periodMenu .btn-group > .btn:first-child{ border-radius: 999px 0 0 999px; }
+.periodMenu .btn-group > .btn:last-child{  border-radius: 0 999px 999px 0; }
+
+
+  /* ——— Base + compact spacing ——— */
+  *{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+  body{background:var(--bg)!important;color:var(--text);line-height:1.35}
+  h1{margin:8px 0 2px;font-weight:800;letter-spacing:.02em;font-size:clamp(26px,4vw,44px)}
+  h2,h3{margin:8px 0 4px}
+
+
+  /* Only the 'Crescent' inline link in the header */
+  .periodMenu p a[href="/crescent"]{
+    color:#5e708a !important;
+    font-weight:600;
+    text-decoration:none;
+  }
+  .periodMenu p a[href="/crescent"]:hover{
+    text-decoration:underline;
   }
 
-  .windTable table {
-    margin-top: .9pc;
-    margin-left: auto;
-    margin-right: auto;
-    font-family: Arial, Helvetica, sans-serif;
-
-    color: #0c20d3
+  .periodMenu{ margin:2px 0 2px; color:var(--text) }
+  .btn-group{ margin:2px auto 2px}
+    /* Segmented 3-piece pill in the header */
+    .periodMenu .btn-group .btn{ border-radius:0!important; }
+  .periodMenu .btn-group .btn:first-child{
+    border-top-left-radius:999px!important; border-bottom-left-radius:999px!important;
   }
-
-
-  .windTable th {
-    padding: .75pc;
-    text-align: center;
-    font-weight: normal;
+  .periodMenu .btn-group .btn:last-child{
+    border-top-right-radius:999px!important; border-bottom-right-radius:999px!important;
   }
-
-  .windTable td {
-    padding: 0.75rem .85rem;
-    /* Add padding for table cells */
-    text-align: center;
+  /*.periodMenu .btn-group .btn.btn-primary{
+    background-color:#5e708a!important; border-color:#5e708a!important;
   }
+  .periodMenu .btn-group .btn.btn-primary:hover,
+  .periodMenu .btn-group .btn.btn-primary:focus{
+    background-color:#506076!important; border-color:#506076!important;
+  }*/
+  .windTable table{ margin:0px auto 2px; color:var(--text); border-collapse:separate; border-spacing:0 .15rem }
+  .windTable th{ padding:.25rem .45rem; text-align:center; font-weight:normal; color:var(--muted) }
+  .windTable td{ padding:.3rem .5rem; text-align:center; font-size:clamp(22px,3.3vw,40px); font-weight:700 }
 
-  * {
-    margin: 0;
-    padding: 0;
-    font-family: sans-serif;
+  /* ——— Centered page wrapper + rhythm ——— */
+  .page{ max-width:var(--page-max); margin:0 auto; padding:8px 12px; }
+  .stack{ display:grid; grid-auto-rows:min-content; gap:var(--gap); }
+
+  /* ——— One card style for ALL charts ——— */
+  .chartBox{
+    width:100%;
+    padding:4px 6px;
+    border-radius:var(--radius);
+    overflow:hidden;                  /* clip canvas corners */
+    background:var(--panel);
+    color:var(--panel-text);
+    border:1px solid var(--panel-stroke);
   }
+  .chartBox canvas{ background:transparent; }
 
-  .chartCard {
-    width: auto;
-    margin: 25px;
-    /*width: 100vw;
-      height: calc(80pc - 40px);*/
-    background: rgb(23, 255, 255);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  a{color:var(--aqua);text-decoration:none}
+  a:hover{filter:brightness(1.1)}
 
-  .chartBox {
-    /*width: auto;
-      padding: 5pc;
-      display: flex;*/
-    border-radius: 25px;
-    border: solid 3px rgb(12, 6, 193);
-    background: white;
-    /*margin-right: 2pc;
-      margin-bottom: 20pc;
-      justify-content: center;*/
+  /* lift the cards a touch + unify corners */
+.chartBox{
+  box-shadow: 0 6px 20px rgba(0,0,0,.18);
+  border-radius: 14px;
+}
 
-  }
+/* summary row: tidy and responsive */
+.windTable table{
+  margin: 8px auto 2px;
+}
+.windTable thead th{ font-size: clamp(16px,2.3vw,22px); }
+.windTable td{
+  padding:.35rem .6rem;
+  font-size: clamp(20px,3vw,36px);
+}
 
-  .tide {
-    color: #0c20d3;
-    text-align: center;
-    font-family: Arial, Helvetica, sans-serif;
-    font-weight: normal;
-    font-size: medium;
-    margin-top: 2pc;
-  }
+/* time-range buttons to match theme */
+.btn-group .btn,
+.btn-group .btn.btn-primary{
+  /* was background:#162a45; border:1px solid var(--panel-stroke); color:var(--panel-text) */
+  background: rgba(15,34,56,.08) !important;      /* subtle, light */
+  border: 1px solid rgba(15,34,56,.18) !important;
+  color: var(--text) !important;
+  padding: 5px 10px;                               /* slimmer */
+  border-radius: 10px;
+  box-shadow: none;
+}
+.btn-group .btn:hover{ background: rgba(15,34,56,.12) !important; }
 
-  .info {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    background-color: #f1f1f1;
-    border-radius: 50%;
-    text-align: center;
-    font-size: 12px;
-    line-height: 20px;
-    margin-left: 5px;
-    vertical-align: text-top;
-    font-weight: bold;
-  }
+/* active state: gentle aqua emphasis */
+.btn-group .active{
+  background: rgba(0,225,209,.14) !important;
+  border-color: var(--aqua) !important;
+  box-shadow: 0 0 0 2px rgba(0,225,209,.16) inset;
+}
 
-  .container.text-center.mt-4 p {
+/* page spacing */
+.page{ padding-top: 6px; }
+.stack{ gap: 12px; }
 
-    color: #0c20d3;
-  }
+/* ---- PERIOD MENU PILLS (Bootstrap 4 compatible) ---- */
+
+/* shape */
+.periodMenu .btn-group .btn{ 
+  border-radius:0 !important; 
+  padding:3px 10px; 
+  line-height:1.1;
+  box-shadow:none !important;
+}
+.periodMenu .btn-group .btn:first-child{
+  border-top-left-radius:999px !important; 
+  border-bottom-left-radius:999px !important;
+}
+.periodMenu .btn-group .btn:last-child{
+  border-top-right-radius:999px !important; 
+  border-bottom-right-radius:999px !important;
+}
+
+/* INACTIVE (very light) */
+.periodMenu .btn-group .btn.btn-primary{
+  background-color: rgba(94,112,138,0.08) !important;   /* lighter fill */
+  border-color:     rgba(94,112,138,0.28) !important;
+  color: var(--text) !important;
+}
+.periodMenu .btn-group .btn.btn-primary:hover{
+  background-color: rgba(94,112,138,0.14) !important;
+  border-color:     rgba(94,112,138,0.40) !important;
+}
+
+/* ACTIVE (selected) */
+.periodMenu .btn-group .btn.btn-primary.active,
+.periodMenu .btn-group .btn.btn-primary[aria-current="page"]{
+  background-color: #5e708a !important;
+  border-color:     #5e708a !important;
+  color:#fff !important;
+  font-weight:700;
+}
+
+/* targets that specific line under the tide chart */
+.page .text-center p{
+  font-size: clamp(20px, 1.6vw, 18px);
+  font-weight: 700;
+  letter-spacing: .01em;
+  opacity: .95;
+  margin: 4px 0 0;
+}
+
+/* More space *between* the four columns (Avg / Max / Min / Dir) */
+.windTable table{
+  /* border-spacing: H  V */
+  border-spacing: .75rem .04rem;   /* was 0 .04rem */
+}
+
+/* Keep the label↔number gap tight while adding side breathing room */
+.windTable thead th{
+  padding: .12rem .35rem .06rem;   /* top | L/R | bottom (slightly less L/R) */
+}
+.windTable tbody td{
+  padding: .06rem .35rem 0;        /* top | L/R | bottom */
+}
+
+/* Slightly smaller gaps on phones */
+@media (max-width: 640px){
+  .windTable table{ border-spacing: .5rem .03rem; }
+}
+
+
 </style>
 
-
+<!-- Header / menu -->
 <div class="periodMenu">
   <div class="container">
     <center>
-
-      <p> Recent winds at <a href="/crescent">Crescent<span class="info">i</span></a></p>
-
-
+      <p>Recent winds at <a href="/crescent">Crescent</a></p>
       <div class="btn-group">
         <a href="#" class="btn btn-primary active" aria-current="page">1 hour</a>
         <a href="graph_3hr" class="btn btn-primary">3 hours</a>
@@ -112,20 +289,13 @@
   </div>
 </div>
 
-
-
+<!-- Summary numbers -->
 <div class="windTable">
   <div class="container">
     <table>
       <thead>
-        <tr>
-          <th>Avg</th>
-          <th>Max</th>
-          <th>Min</th>
-          <th>Dir</th>
-        </tr>
+        <tr><th>Avg</th><th>Max</th><th>Min</th><th>Dir</th></tr>
       </thead>
-
       <tbody>
         <tr>
           <td>{{ past_hour_avg_wind_spd|round(1) }}</td>
@@ -134,303 +304,249 @@
           <td>{{ avg_wind_dir }}</td>
         </tr>
       </tbody>
-
-
-
     </table>
   </div>
 </div>
 
-</div><br>
-
-
-
-
-<div class="container">
-  <!--<center><div class="chartCard"></center>-->
+<!-- Charts -->
+<div class="page stack">
   <div class="chartBox">
     <canvas id="myChart"></canvas>
   </div>
+
+  {% if tide_ok %}
+    <div class="chartBox">
+      <canvas id="myChartTide"></canvas>
+    </div>
+    <div class="text-center" style="margin-top:8px;">
+      <p class="next-tide" > Next tide is {{ next_peak_state }} at {{ next_peak_time }}</p>
+    </div>
+  {% else %}
+    <div class="text-center" style="margin-top:8px;">
+      <div class="alert alert-warning">⚠️ {{ tide_error_msg or "Tide data temporarily unavailable." }}</div>
+    </div>
+  {% endif %}
 </div>
-</div>
 
-
-
-<!-- Include jQuery -->
+<!-- Libraries -->
 <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.4.4/d3.min.js"
   integrity="sha512-hnFpvCiJ8Fr1lYLqcw6wLgFUOEZ89kWCkO+cEekwcWPIPKyknKV1eZmSSG3UxXfsSuf+z/SgmiYB1zFOg3l2UQ=="
   crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-trendline"></script>
 
-
+<!-- Read palette into JS (used by BOTH charts) -->
+<!-- Read palette into JS (used by BOTH charts) -->
 <script>
+  const css        = getComputedStyle(document.documentElement);
+  const AQUA       = css.getPropertyValue('--aqua').trim();
+  const GRID       = css.getPropertyValue('--grid').trim();
+  const PANEL_TEXT = css.getPropertyValue('--panel-text').trim();
+</script>
 
-  // setup 
-  const data = {
-    /// code to take labels and values from flask app
+<!-- Shared Chart.js options for BOTH charts -->
+<script>
+  const commonOptions = {
+    layout: { padding: { top: 8, left: 6, right: 6, bottom: 4 } },
+    plugins: {
+      legend: {
+        labels: { color: PANEL_TEXT, boxWidth: 12, boxHeight: 12 },
+        onHover: (e)=> e.native.target.style.cursor='pointer'
+      },
+      tooltip: {
+        backgroundColor: '#0f2238',
+        titleColor: PANEL_TEXT,
+        bodyColor: PANEL_TEXT,
+        borderColor: 'rgba(255,255,255,.15)',
+        borderWidth: 1,
+        padding: 8
+      }
+    },
+    elements: { point: { radius: 3, hoverRadius: 5 } },
+    scales: {
+      x: { grid: { color: GRID }, ticks: { color: AQUA, autoSkip: true, maxTicksLimit: 8 } },
+      y: { grid: { color: GRID }, ticks: { color: AQUA, maxTicksLimit: 6 } }
+    }
+  };
+</script>
+
+<!-- Wind chart -->
+<script>
+  const windData = {
     labels: {{ labels | safe }},
-  datasets: [
-    {
+    datasets: [{
       label: "wind speeds",
       data: {{ values | safe }},
+      borderColor: AQUA,
+      backgroundColor: 'rgba(0,225,209,.15)',
+      pointBackgroundColor: AQUA,
+      borderWidth: 2,
+      tension: 0.35,  // (Chart.js v3+: use tension, not lineTension)
+      trendlineLinear: { lineColor: AQUA, lineStyle: "dotted|solid", width: 2.0, projection: false }
+    }]
+  };
 
-
-    backgroundColor: [
-      'rgba(255, 26, 104, 1)',
-    ],
-
-    borderColor: [
-      'rgba(255, 0, 0, 1)',
-    ],
-
-    borderWidth: 2,
-    lineTension: 0.5,
-
-    trendlineLinear: {
-      lineColor: 'rgba(255, 0, 0, 1)',
-      lineStyle: "dotted|solid",
-      width: 2.5,
-      projection: false
-    },            
-        }]
-      };
-
-  // config 
-  const config = {
-    type: 'line',
-    data,
-    options: {
-
-      scales: {
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'Wind Speed Knts'
-
-          }
-        }
+  const windOptions = {
+    ...commonOptions,
+    scales: {
+      ...commonOptions.scales,
+      y: {
+        ...commonOptions.scales.y,
+        beginAtZero: true,
+        title: { display: true, text: 'Wind Speed kts', color: PANEL_TEXT }
       }
     }
   };
 
-  // render init block
-  const myChart = new Chart(
-    document.getElementById('myChart'),
-    config
-  );
+  new Chart(document.getElementById('myChart'), {
+    type: 'line',
+    data: windData,
+    options: windOptions
+  });
 </script>
 
 
-<!-- now the tide chart code -->
-{% if tide_ok %}
-
-  <style>
-    .chartBox {
-      width: 75%;
-      border-radius: 25px;
-      border: solid 3px rgb(12, 6, 193);
-      background: white;
-      margin: auto;
-      margin-bottom: 35px;
-    }
-  </style>
-
-  <div class="container">
-    <div class="chartBox">
-      <canvas id="myChartTide"></canvas>
-    </div>
-  </div>
-
-  <div class="container text-center mt-4">
-    <p>Next tide is {{ next_peak_state }} at {{ next_peak_time }}</p>
-  </div>
-
-  <script>
-    /* your existing tide JS exactly as-is (sunrise/sunset + /data + Chart.js) */
-  </script>
-
-{% else %}
-
-  <div class="container text-center mt-4">
-    <div class="alert alert-warning">⚠️ {{ tide_error_msg or "Tide data temporarily unavailable." }}</div>
-  </div>
-
-{% endif %}
-
+<!-- Wind chart -->
 <script>
-  // Function to calculate the x-position based on the hour
-  function getCurrentX(hour, chartArea) {
-    const ratio = hour / 24;
-    return chartArea.left + ratio * (chartArea.right - chartArea.left);
-  }
+  const windData = {
+    labels: {{ labels | safe }},
+    datasets: [{
+      label: "wind speeds",
+      data: {{ values | safe }},
+      borderColor: AQUA,
+      backgroundColor: 'rgba(0,225,209,.15)',
+      pointBackgroundColor: AQUA,
+      borderWidth: 2,
+      lineTension: 0.5,
+      trendlineLinear: { lineColor: AQUA, lineStyle: "dotted|solid", width: 2.0, projection: false }
+    }]
+  };
 
-  // Convert time to decimals
-  function timeToDecimal(timeString) {
+  const windOptions = {
+    plugins: { legend: { labels: { color: PANEL_TEXT } } },
+    scales: {
+      x: { grid: { color: GRID }, ticks: { color: AQUA } },
+      y: {
+        beginAtZero: true,
+        grid: { color: GRID },
+        ticks: { color: AQUA },
+        title: { display: true, text: 'Wind Speed kts', color: PANEL_TEXT }
+      }
+    }
+  };
+
+  new Chart(document.getElementById('myChart'), { type:'line', data: windData, options: windOptions });
+</script>
+
+<!-- Tide chart (uniform look + dark-card shading) -->
+{% if tide_ok %}
+<script>
+  // Helpers from your previous template
+  function getCurrentX(hour, ca){ const r = hour/24; return ca.left + r*(ca.right-ca.left); }
+  function timeToDecimal(timeString){
     const [time, period] = timeString.split(" ");
-    let [hours, minutes] = time.split(":").map(Number);
-    minutes = minutes / 60;
-
-    if (period === 'PM' && hours !== 12) {
-      hours += 12;
-    }
-    if (period === 'AM' && hours === 12) {
-      hours = 0;
-    }
-
-    return hours + minutes;
+    let [h, m, s] = time.split(":").map(Number); m = m || 0; s = s || 0;
+    if (period === 'PM' && h !== 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return h + m/60 + s/3600;
   }
 
   function drawTimeLinesAndShading(animation, sunriseTime, sunsetTime) {
-    const chart = animation.chart;
-    const ctx = chart.ctx;
-    const chartArea = chart.chartArea;
+    const chart = animation.chart, ctx = chart.ctx, ca = chart.chartArea;
 
     const sunriseHour = timeToDecimal(sunriseTime);
-    const sunsetHour = timeToDecimal(sunsetTime);
-    const currentTime = new Date();
-    const currentHour = currentTime.getHours() + currentTime.getMinutes() / 60;
+    const sunsetHour  = timeToDecimal(sunsetTime);
+    const now         = new Date();
+    const currentHour = now.getHours() + now.getMinutes()/60;
 
-    const currentX = getCurrentX(currentHour, chartArea);
-    const sunriseX = getCurrentX(sunriseHour, chartArea);
-    const sunsetX = getCurrentX(sunsetHour, chartArea);
+    const currentX = getCurrentX(currentHour,  ca);
+    const sunriseX = getCurrentX(sunriseHour, ca);
+    const sunsetX  = getCurrentX(sunsetHour,  ca);
 
-    // Shading for night hours
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
-    ctx.fillRect(chartArea.left, chartArea.top, sunriseX - chartArea.left, chartArea.bottom - chartArea.top);
-    ctx.fillRect(sunsetX, chartArea.top, chartArea.right - sunsetX, chartArea.bottom - chartArea.top);
+    ctx.save();
+    // light night bands on dark card
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(ca.left, ca.top, sunriseX - ca.left, ca.bottom - ca.top);
+    ctx.fillRect(sunsetX,  ca.top, ca.right  - sunsetX, ca.bottom - ca.top);
 
-    // Draw lines for sunrise, sunset, and current time
-    [currentX, sunriseX, sunsetX].forEach((x, index) => {
-      ctx.beginPath();
-      ctx.moveTo(x, chartArea.top);
-      ctx.lineTo(x, chartArea.bottom);
-      ctx.strokeStyle = index === 0 ? 'rgba(255, 0, 0, 1)' : 'rgba(0, 0, 0, 0.6)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+    // verticals: aqua for "now", soft white for sunrise/sunset
+    [[currentX, AQUA], [sunriseX, 'rgba(255,255,255,0.5)'], [sunsetX, 'rgba(255,255,255,0.5)']]
+    .forEach(([x, color]) => {
+      ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom);
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
     });
+    ctx.restore();
   }
 
-  function adjustToLocalTime(utcTime, isSunset = false) {
-    const localTimeZone = 'Atlantic/Bermuda';
-    const date = new Date();
-    const [time, period] = utcTime.split(' ');
-    let [hours, minutes, seconds] = time.split(':').map(Number);
-
-    if (period === "PM" && hours !== 12) {
-      hours += 12;
-    } else if (period === "AM" && hours === 12) {
-      hours = 0;
-    }
-
-    // Convert to Bermuda time with DST handling
-    const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes, seconds));
-    return new Intl.DateTimeFormat('en-US', {
-      timeZone: localTimeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    }).format(utcDate);
-  }
-
-  // Fetch sunrise and sunset times
+  // Fetch sunrise/sunset → fetch tide data → build chart
   jQuery.ajax({
     url: "https://api.sunrise-sunset.org/json?lat=32.2949&lng=-64.7830&date=today",
     type: 'GET',
     dataType: 'json',
     success: function (data) {
-      const sunriseTimeUTC = data.results.sunrise;
-      const sunsetTimeUTC = data.results.sunset;
-      console.log("UTC Sunrise:", sunriseTimeUTC, "UTC Sunset:", sunsetTimeUTC);
+      const sunriseUTC = data.results.sunrise;
+      const sunsetUTC  = data.results.sunset;
 
-      const sunriseTime = adjustToLocalTime(sunriseTimeUTC);
-      const sunsetTime = adjustToLocalTime(sunsetTimeUTC, true);
+      // Convert to Bermuda local time
+      function toBDA(utcTime){
+        const tz = 'Atlantic/Bermuda';
+        const d = new Date();
+        const [t, period] = utcTime.split(' ');
+        let [h,m,s] = t.split(':').map(Number);
+        if (period === "PM" && h !== 12) h += 12;
+        if (period === "AM" && h === 12) h = 0;
+        const utcDate = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), h, m, s));
+        return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true }).format(utcDate);
+      }
+      const sunrise = toBDA(sunriseUTC);
+      const sunset  = toBDA(sunsetUTC);
 
-      console.log("Adjusted Sunrise:", sunriseTime);
-      console.log("Adjusted Sunset:", sunsetTime);
+      // Then get the tide series
+      $.getJSON('/data', function (tideData) {
+        const fullHourLabels = tideData.times.map(t => `${parseInt(t.split(" ")[1].split(":")[0],10)}:00`);
+        const desiredLabels  = fullHourLabels.map(l => ["6:00","12:00","18:00"].includes(l) ? l : "");
 
-      $(document).ready(function () {
-        $.getJSON('/data', function (tideData) {
-          console.log("✅ Raw Tide Data:", tideData);
-
-          if (!tideData.times) {
-            console.error("❌ Error: `tideData.times` is missing or undefined!");
-            return;
-          }
-
-          console.log("✅ Tide Timestamps (Raw Data):", tideData.times);
-
-          // Convert timestamps to simplified hour labels
-          const fullHourLabels = tideData.times.map(time => {
-            let hour = parseInt(time.split(" ")[1].split(":")[0], 10);  // Extract hour from "YYYY-MM-DD HH:MM"
-            return `${hour}:00`;
-          });
-
-          // Show only 6:00, 12:00, and 18:00
-          const desiredLabels = fullHourLabels.map(label =>
-            ["6:00", "12:00", "18:00"].includes(label) ? label : ""
-          );
-
-          var ctx = document.getElementById('myChartTide').getContext('2d');
-          var myChartTide = new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: desiredLabels,  // ✅ SIMPLIFIED X-AXIS LABELS
-              datasets: [{
-                label: "Bermuda's tides today",
-                data: tideData.values,
-                borderColor: 'rgba(255, 0, 0, 1)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                tension: 0.4,
-                borderWidth: 3
-              }]
+        const ctx = document.getElementById('myChartTide').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: desiredLabels,
+            datasets: [{
+              label: "Bermuda's tides today",
+              data: tideData.values,
+              borderColor: AQUA,
+              backgroundColor: 'rgba(0,225,209,.12)',
+              tension: 0.4,
+              borderWidth: 3,
+              pointRadius: 0
+            }]
+          },
+          options: {
+            scales: {
+              x: { grid:{ color: GRID }, ticks:{ autoSkip:true, maxRotation:0, color:AQUA } },
+              y: { beginAtZero:true, grid:{ color: GRID }, ticks:{ color:AQUA } }
             },
-            options: {
-              scales: {
-                y: { beginAtZero: true },
-                x: {
-                  ticks: { autoSkip: true, maxRotation: 0 }  // ✅ Keeps only key times
-                }
-              },
-              animation: {
-                onComplete: function (animation) {
-                  drawTimeLinesAndShading(animation, sunriseTime, sunsetTime);
-                }
-              },
-              plugins: {
-                title: {
-                  display: true,
-                  text: 'Bermuda Tides Today',
-                  font: { size: 10 },
-                  padding: { top: 10, bottom: 10 }
-                },
-                legend: { display: false }
-              },
-              elements: { point: { radius: 0 } }
-            }
-          });
-        }).fail(function (jqxhr, textStatus, error) {
-          console.error("❌ AJAX Request to /data Failed! Status:", textStatus, "| Error:", error);
+            plugins: {
+              title: { display:true, text:'Bermuda Tides Today', color:PANEL_TEXT, padding:{top:10,bottom:10} },
+              legend: { display:false }
+            },
+            animation: {
+              onComplete: (animation) => drawTimeLinesAndShading(animation, sunrise, sunset)
+            },
+            elements: { point: { radius: 0 } }
+          }
         });
       });
     }
-  });  
+  });
 </script>
+{% endif %}
 
-
-
-{% endblock %}
-
-
+<!-- Bootstrap JS (optional; your base.html may already include these) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
   integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
   integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
 
-
-</body>
-
-</html>
+{% endblock %}

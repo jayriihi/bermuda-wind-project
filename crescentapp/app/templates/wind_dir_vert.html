@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+    .header,
+    .legend {
+        color: #1e2b44 !important;
+    }
+
+    .header .big {
+        color: #1e2b44 !important;
+    }
+
+    .legend span {
+        color: #1e2b44 !important;
+        border-color: #1e2b44 !important;
+        background: rgba(30, 43, 68, .06);
+    }
+</style>
+
+<!-- Old header with TWD and ±labels (commented out)
+<div class="header"
+     style="display:flex;justify-content:space-between;align-items:baseline;font-variant-numeric:tabular-nums;margin-bottom:8px">
+  <div class="big" style="font-size:22px;font-weight:700">TWD <span id="twd-now">—</span>°</div>
+  <div><span id="twd-min">—</span> – <span id="twd-max">—</span></div>
+</div>
+-->
+
+<div class="wrap" style="max-width:460px;margin:0 auto;padding:10px 12px">
+    <h3 class="page-title" style="margin:0 0 8px 0;text-align:center;color:#1e2b44;font-weight:700;">
+        3hr wind direction history
+    </h3>
+
+    <div class="panel" style="background:#0f1b2f;border:1px solid #1d2a43;border-radius:10px;
+                padding:10px;height:78vh;display:flex">
+        <canvas id="wd" style="width:100%;height:100%"></canvas>
+    </div>
+
+    <!-- simple labels under the chart -->
+    <div id="wd-labels" style="margin-top:8px;text-align:center;color:#1e2b44;">
+        <span id="lbl-current" style="font-size:25px;font-weight:700;">Current dir —°</span>
+    </div>
+
+
+</div>
+
+
+<!-- Chart.js + date adapter -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+
+<script>
+    // ---- Inputs from Flask ----
+    const labels = {{ labels| tojson }};     // ISO strings (ideally ...Z)
+    const dirs360 = {{ wind_dirs| tojson }};  // numbers 0..360
+
+    // ---- Robust timestamp parser ----
+    function parseWhen(t) {
+        if (typeof t === 'number') return new Date(t);
+        const s = String(t);
+        let d = new Date(s);
+        if (!isNaN(d)) return d;
+        d = new Date((s.includes('T') ? s : s.replace(' ', 'T')) + (/[Z+\-]/.test(s) ? '' : 'Z'));
+        return isNaN(d) ? null : d;
+    }
+
+    // ---- Build & clean pairs, sorted by time ----
+    const pairs = labels.map((t, i) => ({ t: parseWhen(t), d: Number(dirs360[i]) }))
+        .filter(p => p.t && Number.isFinite(p.d))
+        .sort((a, b) => a.t - b.t);
+
+    if (!pairs.length) {
+        console.warn('No valid wind_dir points to plot.');
+    }
+
+    const times = pairs.map(p => p.t);
+    const dirs = pairs.map(p => p.d);
+
+    // ---- Y-axis bounds (oldest..newest) ----
+    const tms = times.map(t => t.getTime());
+    const yMinRaw = new Date(Math.min(...tms));   // oldest
+    const yMaxRaw = new Date(Math.max(...tms));   // newest
+
+    // Snap max to the NEXT 15-minute boundary (>= newest point), then back up 3h
+    const QUARTER = 15 * 60 * 1000;
+    const yMaxSnap = new Date(Math.ceil(yMaxRaw.getTime() / QUARTER) * QUARTER);
+    const yMinSnap = new Date(yMaxSnap.getTime() - 3 * 60 * 60 * 1000);
+
+    // Pretty labels: now, -15, -30, -45, -1h, -1:15, ... -3h
+    function relLabel(ts, newest) {
+        const mins = Math.round((newest - ts) / 60000); // minutes ago
+        if (mins === 0) return 'now';
+        if (mins % 60 === 0) return `-${mins / 60}h`;
+        if (mins < 60) return `-${mins}`;
+        const h = Math.floor(mins / 60), m = mins % 60;
+        return `-${h}:${String(m).padStart(2, '0')}`;
+    }
+
+
+    // ---- Circular mean & signed deltas (−180..+180) ----
+    const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
+    const S = dirs.reduce((a, d) => a + Math.sin(toRad(d)), 0);
+    const C = dirs.reduce((a, d) => a + Math.cos(toRad(d)), 0);
+    const meanDeg = toDeg(Math.atan2(S, C));
+    const delta = d => ((d - meanDeg + 540) % 360) - 180;
+    const deltas = dirs.map(delta);
+
+    // ---- Header numbers ----
+    const nowDeg = dirs.at(-1);
+    const maxAbs = deltas.length ? Math.max(...deltas.map(Math.abs)) : null;
+    const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    setTxt('twd-now', Number.isFinite(nowDeg) ? Math.round(nowDeg) : '—');
+    if (maxAbs != null) { setTxt('twd-min', `–${Math.round(maxAbs)}°`); setTxt('twd-max', `+${Math.round(maxAbs)}°`); }
+
+
+    // observed spread in header
+    const minDelta = Math.min(...deltas);
+    const maxDelta = Math.max(...deltas);
+    setTxt('twd-min', `–${Math.abs(Math.round(minDelta))}°`);
+    setTxt('twd-max', `+${Math.round(maxDelta)}°`);
+
+    // fill the pills: current dir + avg dir
+    const mean360 = ((meanDeg % 360) + 360) % 360;
+    setTxt('lbl-current', `Current dir ${Math.round(nowDeg)}°`);
+    setTxt('lbl-average', `avg dir ${Math.round(mean360)}°`);
+
+
+
+    // ---- Dynamic X span: min 100°, expand if needed (with small padding) ----
+    const PAD = 5;
+    const span = (maxAbs != null) ? Math.max(100, Math.min(360, 2 * maxAbs + 2 * PAD)) : 100;
+    const xMin = -span / 2, xMax = span / 2;
+
+    // ---- Points: x = Δ°, y = Date ----
+    const points = times.map((t, i) => ({ x: deltas[i], y: t }));
+
+    // Make the trace touch the "now" tick (yMaxSnap)
+    const lastTime = times.at(-1);
+    if (yMaxSnap > lastTime) {
+        points.push({ x: deltas.at(-1), y: yMaxSnap });
+    }
+
+    // ---- Reference line plugin at x=0 (mean) ----
+    const refLine = {
+        id: 'refLine',
+        afterDraw(chart) {
+            const { ctx, chartArea, scales } = chart;
+            if (!chartArea) return;
+            const x0 = scales.x.getPixelForValue(0);
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x0, chartArea.top);
+            ctx.lineTo(x0, chartArea.bottom);
+            ctx.stroke();
+            ctx.restore();
+        }
+    };
+
+    // ---- Chart ----
+    new Chart(document.getElementById('wd'), {
+        type: 'line',
+        data: {
+            datasets: [{
+                data: points,
+                tension: 0.25,
+                spanGaps: true,
+                borderWidth: 2,
+                pointRadius: 0,
+                borderColor: '#8ab4ff'
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            animation: false,
+            normalized: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                // in options.scales.x
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'Δ° from circular mean' },
+                    min: xMin,
+                    max: xMax,
+                    grid: { color: 'rgba(255,255,255,0.09)' },
+                    ticks: {
+                        color: '#bcd0ff',
+                        // Replace the 0 tick label with "avg XX°"
+                        callback: (v) => (Math.abs(+v) < 1e-6 ? `avg ${Math.round(mean360)}°` : v)
+                    }
+                },
+                y: {
+                    type: 'time',
+
+                    // window + orientation
+                    reverse: true,            // now at bottom
+                    bounds: 'ticks',
+                    min: yMinSnap,            // snapped to 3h ago
+                    max: yMaxSnap,            // snapped to next 15-min boundary
+                    offset: false,
+
+                    time: {
+                        unit: 'minute',
+                        stepSize: 5,            // 5-minute cadence for ticks/grid
+                        round: 'minute',
+                        displayFormats: { minute: 'HH:mm' },
+                        tooltipFormat: 'HH:mm'
+                    },
+
+                    // grid: stronger line every 15 min, lighter at 5 min
+                    grid: {
+                        color: (ctx) => {
+                            const v = +ctx.tick.value;
+                            return (v % (15 * 60 * 1000) === 0)
+                                ? 'rgba(255,255,255,0.16)'
+                                : 'rgba(255,255,255,0.07)';
+                        }
+                    },
+
+                    ticks: {
+                        color: '#bcd0ff',
+                        autoSkip: false,        // we will build ticks ourselves
+                        // Label only 15-minute ticks; others show no text
+                        callback: (v) => {
+                            if (+v === +yMaxSnap) return 'now';
+                            const mins = Math.round((yMaxSnap - v) / 60000);
+                            if (mins % 15 !== 0) return '';               // hide 5/10/20/etc not aligned to 15
+                            // pretty relative label at 15-min multiples
+                            if (mins % 60 === 0) return `-${mins / 60}h`;
+                            if (mins < 60) return `-${mins}`;
+                            const h = Math.floor(mins / 60), m = mins % 60;
+                            return `-${h}:${String(m).padStart(2, '0')}`;
+                        },
+                        // Build ticks every 5 minutes from now (yMaxSnap) backward to yMinSnap
+                        afterBuildTicks: () => {
+                            const FIVE = 5 * 60 * 1000;
+                            const out = [];
+                            for (let t = yMaxSnap.getTime(); t >= yMinSnap.getTime(); t -= FIVE) {
+                                out.push({ value: t });
+                            }
+                            return out;
+                        }
+                    }
+                }
+
+            }
+        },
+        plugins: [refLine]
+    });
+</script>
+{% endblock %}
