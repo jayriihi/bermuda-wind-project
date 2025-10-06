@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Wind session{% endblock %}
+
+{% block content %}
+<style>
+  .page-wrap { max-width: var(--page-max, 1100px); margin: 0 auto; padding: 20px; }
+  .card-dark {
+    background: var(--panel, #0f2238);
+    color: var(--panel-text, #e6eef8);
+    border: 1px solid var(--panel-stroke, rgba(255,255,255,.14));
+    border-radius: var(--radius, 12px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+    padding: clamp(16px, 3vw, 28px);
+  }
+  .title { display:flex; flex-wrap:wrap; gap:10px; align-items:baseline; justify-content:space-between; }
+  .title h2 { margin:0; font-size: clamp(18px, 2.2vw, 26px); }
+  .meta { opacity:.9; font-size: .95rem; }
+
+  .stat-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap:12px; margin-top:14px; }
+  .stat {
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--panel-stroke, rgba(255,255,255,.14));
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .stat .label { font-size:.8rem; opacity:.85; }
+  .stat .value { font-weight:800; font-variant-numeric: tabular-nums; }
+
+  .chart-wrap {
+    margin-top: 16px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--panel-stroke, rgba(255,255,255,.14));
+    border-radius: 14px;
+    padding: 10px 12px;
+  }
+  .chart-box { height: 360px; }
+
+  .tide-summary {
+    margin-top: 16px;
+    border-top: 1px dashed var(--panel-stroke, rgba(255,255,255,.18));
+    padding-top: 12px;
+    font-size: .95rem;
+    display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between;
+  }
+  .actions { display:flex; justify-content:flex-end; margin-top: 14px; }
+  .btn-secondary {
+    background: transparent; color: var(--aqua, #00e1d1);
+    border: 1px solid var(--aqua, #00e1d1);
+    border-radius: 10px; padding: 8px 12px; font-weight:700;
+  }
+
+  
+</style>
+
+<div class="page-wrap">
+  <div class="card-dark">
+    <div class="title">
+      <h2>Session on {{ value_date }} at {{ value_time }} for {{ "%d"|format(value_hours) }}hr {{ "%d"|format(value_minutes) }}min</h2>
+      <div class="meta">Upwindsports · Crescent data</div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Avg</div><div class="value">{{ value_avg }} kt</div></div>
+      <div class="stat"><div class="label">Max</div><div class="value">{{ value_max }} kt</div></div>
+      <div class="stat"><div class="label">Min</div><div class="value">{{ value_min }} kt</div></div>
+      <div class="stat"><div class="label">Dir (avg)</div><div class="value">{{ value_avg_wind_dir }}°</div></div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-box">
+        <canvas id="windChart"></canvas>
+      </div>
+    </div>
+
+    {# Tide synopsis only #}
+    {% set prev_state = 'High' if prev_peak_state == 'H' else ('Low' if prev_peak_state == 'L' else prev_peak_state) %}
+    {% set next_state = 'High' if next_peak_state == 'H' else ('Low' if next_peak_state == 'L' else next_peak_state) %}
+    <div class="tide-summary">
+      <div><strong>Tide (session window):</strong> {{ flow_state_beg }} → {{ flow_state_end }}</div>
+      <div><strong>Prev:</strong> {{ prev_state }} at {{ prev_peak_time }}</div>
+      <div><strong>Next:</strong> {{ next_state }} at {{ next_peak_time }}</div>
+    </div>
+
+    <div class="actions">
+      <a class="btn-secondary" href="{{ url_for('windput') }}">New session</a>
+    </div>
+  </div>
+</div>
+
+{# Chart.js (use existing include if base already loads it; this is safe if duplicated) #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+  const css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue('--aqua').trim() || '#00e1d1';
+  const grid   = css.getPropertyValue('--grid').trim() || 'rgba(255,255,255,.08)';
+  const text   = css.getPropertyValue('--panel-text').trim() || '#e6eef8';
+
+  const labels = {{ labels|tojson }};
+  const values = {{ values|tojson }};
+
+  const ctx = document.getElementById('windChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'wind speed',
+        data: values,
+        borderColor: accent,
+        backgroundColor: 'transparent',
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        tension: 0.25,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: text } },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        x: {
+          ticks: { color: text },
+          grid: { color: grid }
+        },
+        y: {
+          beginAtZero: false,
+          ticks: { color: text },
+          grid: { color: grid }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

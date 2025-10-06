@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% set H = hours|default(1)|int %}
 
 <style>
   /* ——— Palette ——— */
@@ -160,7 +161,23 @@ h1::after{
     background:var(--panel);
     color:var(--panel-text);
     border:1px solid var(--panel-stroke);
+    height:360px;                    /* 1-hour default */
   }
+
+  .chartBox.tall{ height:360px; }    /* 3h / 8h */
+
+  .chartBox canvas{
+  display: block;
+  background: transparent;
+  width: 100% !important;
+  height: 100% !important;
+  }
+
+  @media (max-width:640px){
+    .chartBox{ height:220px; }
+    .chartBox.tall{ height: 220px; }
+  }
+    
   .chartBox canvas{ background:transparent; }
 
   a{color:var(--aqua);text-decoration:none}
@@ -272,6 +289,12 @@ h1::after{
   .windTable table{ border-spacing: .5rem .03rem; }
 }
 
+/* a bit shorter than the wind card */
+.chartBox.tide{ height:420px; }
+@media (max-width:640px){
+  .chartBox.tide{ height:220px; }
+}
+
 
 </style>
 
@@ -281,10 +304,11 @@ h1::after{
     <center>
       <p>Recent winds at <a href="/crescent">Crescent</a></p>
       <div class="btn-group">
-        <a href="#" class="btn btn-primary active" aria-current="page">1 hour</a>
-        <a href="graph_3hr" class="btn btn-primary">3 hours</a>
-        <a href="graph_8hr" class="btn btn-primary">8 hours</a>
+        <a class="btn btn-primary {{ 'active' if H==1 else '' }}" href="{{ url_for('winds', hours=1) }}">1 hour</a>
+        <a class="btn btn-primary {{ 'active' if H==3 else '' }}" href="{{ url_for('winds', hours=3) }}">3 hours</a>
+        <a class="btn btn-primary {{ 'active' if H==8 else '' }}" href="{{ url_for('winds', hours=8) }}">8 hours</a>
       </div>
+      
     </center>
   </div>
 </div>
@@ -309,24 +333,13 @@ h1::after{
 </div>
 
 <!-- Charts -->
+<!-- Charts (centered, consistent width) -->
 <div class="page stack">
-  <div class="chartBox">
+  <div class="chartBox {{ 'tall' if H >= 3 else '' }}">
     <canvas id="myChart"></canvas>
   </div>
 
-  {% if tide_ok %}
-    <div class="chartBox">
-      <canvas id="myChartTide"></canvas>
-    </div>
-    <div class="text-center" style="margin-top:8px;">
-      <p class="next-tide" > Next tide is {{ next_peak_state }} at {{ next_peak_time }}</p>
-    </div>
-  {% else %}
-    <div class="text-center" style="margin-top:8px;">
-      <div class="alert alert-warning">⚠️ {{ tide_error_msg or "Tide data temporarily unavailable." }}</div>
-    </div>
-  {% endif %}
-</div>
+
 
 <!-- Libraries -->
 <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
@@ -334,214 +347,190 @@ h1::after{
   integrity="sha512-hnFpvCiJ8Fr1lYLqcw6wLgFUOEZ89kWCkO+cEekwcWPIPKyknKV1eZmSSG3UxXfsSuf+z/SgmiYB1zFOg3l2UQ=="
   crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-trendline"></script>
 
-<!-- Read palette into JS (used by BOTH charts) -->
-<!-- Read palette into JS (used by BOTH charts) -->
+
+
+<!-- Shared Chart.js options + wind chart (single block) -->
+
 <script>
+  const DPR = Math.min(2, window.devicePixelRatio || 1);
+</script>
+
+<script>
+  // palette
   const css        = getComputedStyle(document.documentElement);
   const AQUA       = css.getPropertyValue('--aqua').trim();
   const GRID       = css.getPropertyValue('--grid').trim();
   const PANEL_TEXT = css.getPropertyValue('--panel-text').trim();
-</script>
 
-<!-- Shared Chart.js options for BOTH charts -->
-<script>
+  // range flags from Jinja
+  const H       = {{ H }};                                   // already set at top
+  const isLong  = {{ (H >= 3) | tojson }};
+  const TENSION = {{ (0.25 if H >= 8 else 0.35) | tojson }};
+
+  // data (use tojson, not |safe)
+  const labels = {{ labels | tojson }};
+  const values = {{ values | tojson }};
+
   const commonOptions = {
-    layout: { padding: { top: 8, left: 6, right: 6, bottom: 4 } },
+    responsive: true,
+    maintainAspectRatio: false,
+    devicePixelRatio: DPR,   
     plugins: {
-      legend: {
-        labels: { color: PANEL_TEXT, boxWidth: 12, boxHeight: 12 },
-        onHover: (e)=> e.native.target.style.cursor='pointer'
-      },
+      legend: { display: !isLong, fullSize:false,
+        labels:{ color: PANEL_TEXT, boxWidth:12, boxHeight:12, padding:8 } },
       tooltip: {
         backgroundColor: '#0f2238',
-        titleColor: PANEL_TEXT,
-        bodyColor: PANEL_TEXT,
-        borderColor: 'rgba(255,255,255,.15)',
-        borderWidth: 1,
-        padding: 8
+        titleColor: PANEL_TEXT, bodyColor: PANEL_TEXT,
+        borderColor: 'rgba(255,255,255,.15)', borderWidth:1, padding:8
       }
+      // decimation left off for now to keep things simple
     },
-    elements: { point: { radius: 3, hoverRadius: 5 } },
+    elements: { point: { radius: isLong ? 2 : 3, hoverRadius: isLong ? 3 : 5 } },
     scales: {
-      x: { grid: { color: GRID }, ticks: { color: AQUA, autoSkip: true, maxTicksLimit: 8 } },
-      y: { grid: { color: GRID }, ticks: { color: AQUA, maxTicksLimit: 6 } }
+      x: { grid:{ color: GRID }, ticks:{ color: AQUA, autoSkip:true, maxTicksLimit: isLong ? 12 : 8 } },
+      y: {
+        grid:{ color: GRID }, ticks:{ color: AQUA, maxTicksLimit: isLong ? 7 : 6 },
+        beginAtZero:true,
+        title:{ display:true, text:'Wind Speed kts', color:PANEL_TEXT }
+      }
     }
   };
-</script>
 
-<!-- Wind chart -->
-<script>
   const windData = {
-    labels: {{ labels | safe }},
+    labels,
     datasets: [{
       label: "wind speeds",
-      data: {{ values | safe }},
+      data: values,
       borderColor: AQUA,
       backgroundColor: 'rgba(0,225,209,.15)',
       pointBackgroundColor: AQUA,
       borderWidth: 2,
-      tension: 0.35,  // (Chart.js v3+: use tension, not lineTension)
-      trendlineLinear: { lineColor: AQUA, lineStyle: "dotted|solid", width: 2.0, projection: false }
+      tension: TENSION
     }]
-  };
-
-  const windOptions = {
-    ...commonOptions,
-    scales: {
-      ...commonOptions.scales,
-      y: {
-        ...commonOptions.scales.y,
-        beginAtZero: true,
-        title: { display: true, text: 'Wind Speed kts', color: PANEL_TEXT }
-      }
-    }
   };
 
   new Chart(document.getElementById('myChart'), {
     type: 'line',
     data: windData,
-    options: windOptions
+    options: commonOptions
   });
 </script>
 
 
-<!-- Wind chart -->
-<script>
-  const windData = {
-    labels: {{ labels | safe }},
-    datasets: [{
-      label: "wind speeds",
-      data: {{ values | safe }},
-      borderColor: AQUA,
-      backgroundColor: 'rgba(0,225,209,.15)',
-      pointBackgroundColor: AQUA,
-      borderWidth: 2,
-      lineTension: 0.5,
-      trendlineLinear: { lineColor: AQUA, lineStyle: "dotted|solid", width: 2.0, projection: false }
-    }]
-  };
+  <!-- Tide chart (uniform look + dark-card shading) -->
+  {% if tide_ok %}
+  <div class="chartBox tide">
+    <canvas id="myChartTide"></canvas>
+  </div>
+  <div class="text-center" style="margin-top:8px;">
+    <p class="next-tide">Next tide is {{ next_peak_state }} at {{ next_peak_time }}</p>
+  </div>
 
-  const windOptions = {
-    plugins: { legend: { labels: { color: PANEL_TEXT } } },
-    scales: {
-      x: { grid: { color: GRID }, ticks: { color: AQUA } },
-      y: {
-        beginAtZero: true,
-        grid: { color: GRID },
-        ticks: { color: AQUA },
-        title: { display: true, text: 'Wind Speed kts', color: PANEL_TEXT }
-      }
+  <script>
+  (function () {
+    const el = document.getElementById('myChartTide');
+    if (!el) return;                         // safety if DOM changes
+    const ctx = el.getContext('2d');
+    const DPR = Math.min(2, window.devicePixelRatio || 1);
+
+    // helpers
+    function getCurrentX(hour, ca){ const r = hour/24; return ca.left + r*(ca.right-ca.left); }
+    function timeToDecimal(timeString){
+      const [time, period] = timeString.split(" ");
+      let [h,m,s] = time.split(":").map(Number); m = m||0; s = s||0;
+      if (period === 'PM' && h !== 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      return h + m/60 + s/3600;
     }
-  };
+    function drawTimeLinesAndShading(animation, sunriseTime, sunsetTime) {
+      const chart = animation.chart, ctx = chart.ctx, ca = chart.chartArea;
+      const sunriseHour = timeToDecimal(sunriseTime);
+      const sunsetHour  = timeToDecimal(sunsetTime);
+      const now         = new Date();
+      const currentHour = now.getHours() + now.getMinutes()/60;
+      const currentX = getCurrentX(currentHour,  ca);
+      const sunriseX = getCurrentX(sunriseHour, ca);
+      const sunsetX  = getCurrentX(sunsetHour,  ca);
 
-  new Chart(document.getElementById('myChart'), { type:'line', data: windData, options: windOptions });
-</script>
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.fillRect(ca.left, ca.top, sunriseX - ca.left, ca.bottom - ca.top);
+      ctx.fillRect(sunsetX,  ca.top, ca.right  - sunsetX, ca.bottom - ca.top);
+      [[currentX, AQUA], [sunriseX, 'rgba(255,255,255,0.5)'], [sunsetX, 'rgba(255,255,255,0.5)']]
+        .forEach(([x, color]) => { ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke(); });
+      ctx.restore();
+    }
 
-<!-- Tide chart (uniform look + dark-card shading) -->
-{% if tide_ok %}
-<script>
-  // Helpers from your previous template
-  function getCurrentX(hour, ca){ const r = hour/24; return ca.left + r*(ca.right-ca.left); }
-  function timeToDecimal(timeString){
-    const [time, period] = timeString.split(" ");
-    let [h, m, s] = time.split(":").map(Number); m = m || 0; s = s || 0;
-    if (period === 'PM' && h !== 12) h += 12;
-    if (period === 'AM' && h === 12) h = 0;
-    return h + m/60 + s/3600;
-  }
+    // sunrise/sunset → tide series → chart
+    jQuery.ajax({
+      url: "https://api.sunrise-sunset.org/json?lat=32.2949&lng=-64.7830&date=today",
+      type: 'GET', dataType: 'json',
+      success: function (data) {
+        function toBDA(utcTime){
+          const tz = 'Atlantic/Bermuda';
+          const d = new Date();
+          const [t, period] = utcTime.split(' ');
+          let [h,m,s] = t.split(':').map(Number);
+          if (period === "PM" && h !== 12) h += 12;
+          if (period === "AM" && h === 12) h = 0;
+          const utcDate = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), h, m, s||0));
+          return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true }).format(utcDate);
+        }
+        const sunrise = toBDA(data.results.sunrise);
+        const sunset  = toBDA(data.results.sunset);
 
-  function drawTimeLinesAndShading(animation, sunriseTime, sunsetTime) {
-    const chart = animation.chart, ctx = chart.ctx, ca = chart.chartArea;
+        $.getJSON('/data', function (tideData) {
+          const vals   = (tideData.values || []).map(Number);
+          const fullHr = (tideData.times || []).map(t => `${parseInt(t.split(" ")[1].split(":")[0],10)}:00`);
+          const labels = fullHr.map(l => ["6:00","12:00","18:00"].includes(l) ? l : "");
 
-    const sunriseHour = timeToDecimal(sunriseTime);
-    const sunsetHour  = timeToDecimal(sunsetTime);
-    const now         = new Date();
-    const currentHour = now.getHours() + now.getMinutes()/60;
+          // scaled y-range
+          const vMin = Math.min(...vals), vMax = Math.max(...vals);
+          const pad  = Math.max((vMax - vMin) * 0.15, 0.2);
 
-    const currentX = getCurrentX(currentHour,  ca);
-    const sunriseX = getCurrentX(sunriseHour, ca);
-    const sunsetX  = getCurrentX(sunsetHour,  ca);
-
-    ctx.save();
-    // light night bands on dark card
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.fillRect(ca.left, ca.top, sunriseX - ca.left, ca.bottom - ca.top);
-    ctx.fillRect(sunsetX,  ca.top, ca.right  - sunsetX, ca.bottom - ca.top);
-
-    // verticals: aqua for "now", soft white for sunrise/sunset
-    [[currentX, AQUA], [sunriseX, 'rgba(255,255,255,0.5)'], [sunsetX, 'rgba(255,255,255,0.5)']]
-    .forEach(([x, color]) => {
-      ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom);
-      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
-    });
-    ctx.restore();
-  }
-
-  // Fetch sunrise/sunset → fetch tide data → build chart
-  jQuery.ajax({
-    url: "https://api.sunrise-sunset.org/json?lat=32.2949&lng=-64.7830&date=today",
-    type: 'GET',
-    dataType: 'json',
-    success: function (data) {
-      const sunriseUTC = data.results.sunrise;
-      const sunsetUTC  = data.results.sunset;
-
-      // Convert to Bermuda local time
-      function toBDA(utcTime){
-        const tz = 'Atlantic/Bermuda';
-        const d = new Date();
-        const [t, period] = utcTime.split(' ');
-        let [h,m,s] = t.split(':').map(Number);
-        if (period === "PM" && h !== 12) h += 12;
-        if (period === "AM" && h === 12) h = 0;
-        const utcDate = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), h, m, s));
-        return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true }).format(utcDate);
-      }
-      const sunrise = toBDA(sunriseUTC);
-      const sunset  = toBDA(sunsetUTC);
-
-      // Then get the tide series
-      $.getJSON('/data', function (tideData) {
-        const fullHourLabels = tideData.times.map(t => `${parseInt(t.split(" ")[1].split(":")[0],10)}:00`);
-        const desiredLabels  = fullHourLabels.map(l => ["6:00","12:00","18:00"].includes(l) ? l : "");
-
-        const ctx = document.getElementById('myChartTide').getContext('2d');
-        new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: desiredLabels,
-            datasets: [{
-              label: "Bermuda's tides today",
-              data: tideData.values,
-              borderColor: AQUA,
-              backgroundColor: 'rgba(0,225,209,.12)',
-              tension: 0.4,
-              borderWidth: 3,
-              pointRadius: 0
-            }]
-          },
-          options: {
-            scales: {
-              x: { grid:{ color: GRID }, ticks:{ autoSkip:true, maxRotation:0, color:AQUA } },
-              y: { beginAtZero:true, grid:{ color: GRID }, ticks:{ color:AQUA } }
+          const tideChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [{
+                label: "Bermuda's tides today",
+                data: vals,
+                borderColor: AQUA,
+                backgroundColor: 'rgba(0,225,209,.12)',
+                tension: 0.25,
+                borderWidth: 3,
+                pointRadius: 0
+              }]
             },
-            plugins: {
-              title: { display:true, text:'Bermuda Tides Today', color:PANEL_TEXT, padding:{top:10,bottom:10} },
-              legend: { display:false }
-            },
-            animation: {
-              onComplete: (animation) => drawTimeLinesAndShading(animation, sunrise, sunset)
-            },
-            elements: { point: { radius: 0 } }
-          }
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              devicePixelRatio: DPR,                // crisp
+              scales: {
+                x: { grid:{ color: GRID }, ticks:{ color: AQUA, autoSkip:true, maxRotation:0 } },
+                y: { beginAtZero:false, min:vMin - pad, max:vMax + pad, grid:{ color: GRID }, ticks:{ color: AQUA } }
+              },
+              plugins: {
+                title: { display:true, text:'Bermuda Tides Today', color:PANEL_TEXT,
+                         font:{ size:14, weight:600, family:'system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial' },
+                         padding:{ top:10, bottom:10 } },
+                legend: { display:false }
+              },
+              animation: { onComplete: (a) => drawTimeLinesAndShading(a, sunrise, sunset) },
+              elements: { point: { radius: 0 } }
+            }
+          });
+
+          // make sure it stretches to the final width
+          requestAnimationFrame(() => tideChart.resize());
         });
-      });
-    }
-  });
-</script>
+      }
+    });
+  })();
+  </script>
 {% endif %}
+
 
 <!-- Bootstrap JS (optional; your base.html may already include these) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"

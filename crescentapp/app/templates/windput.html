@@ -1,92 +1,71 @@
 {% extends "base.html" %}
 
-
-{% block title %} Session data page {% endblock %}
+{% block title %}Session data page{% endblock %}
 
 {% block content %}
-	<style>
+<style>
+  .page-wrap { max-width: var(--page-max, 1100px); margin: 0 auto; padding: 20px; }
+  .card-dark {
+    background: var(--panel, #0f2238);
+    color: var(--panel-text, #e6eef8);
+    border: 1px solid var(--panel-stroke, rgba(255,255,255,.14));
+    border-radius: var(--radius, 12px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+    padding: clamp(16px, 3vw, 28px);
+  }
+  .card-dark h2 { margin: 0 0 10px; font-size: clamp(20px, 2.2vw, 26px); }
+  .sub { opacity:.85; font-size:.95rem; margin-bottom: 12px; }
+  .form-row { display: grid; gap: 10px; justify-items: center; margin: 14px 0; }
+  .form-row label { width: 100%; max-width: 460px; font-weight: 600; opacity:.9; }
+  .form-row .form-control {
+    width: 100%;
+    max-width: 460px;   /* shorten the bars */
+    height: 42px;       /* compact */
+    padding: 8px 12px;
+    border-radius: 10px;
+  }
+  .actions { display:flex; justify-content:center; margin-top:18px; }
+  .btn-primary {
+    background: var(--aqua, #00e1d1);
+    color: #06202b;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-weight: 700;
+  }
+</style>
 
-	body {
-		background-color: rgb(23, 255, 255)!important;
-		}
+<div class="page-wrap">
+  <div class="card-dark">
+    <h2>Welcome wind fanatics!!</h2>
+    <div class="sub">Enter your session details below</div>
 
-	.chartMenu {
-		width: 100vw;
-		height: 50px;
-		text-align: center;
-		padding-top: 5px;
-		background: #0c20d3;
-		color: rgb(23, 255, 255);
-		font-family: Arial, Helvetica, sans-serif;
-    	font-weight: normal;
-  		}
-	.chartMenu p1 {
-		color: rgb(0, 153, 255);
-		font-size: 25px;
-  		}
-	.form {
-		margin-top: -70px;
-		color: #0c20d3;
-		font-family: Arial, Helvetica, sans-serif;
-    	font-weight: normal;
-		}
-	.form-control {
-			height: 40;
-		}
-	
-		</style>
+    <!-- Single, valid form posting to the results route -->
+    <form method="post" action="{{ url_for('windput') }}">
+      <div class="form-row">
+        <label for="sessiondatetime">Date &amp; start time</label>
+        <input type="datetime-local"
+               class="form-control"
+               id="sessiondatetime"
+               name="sessiondatetime"
+               placeholder="mm/dd/yyyy, hh:mm am/pm">
+      </div>
 
-<div class="chartMenu">
-	<p>Welcome wind fanatics!!</p>
-<br>
-<br>
-<br>
-<br>
-	<p1></p1>
+      <div class="form-row">
+        <label for="duration">Duration (HH:MM)</label>
+        <input type="text"
+               class="form-control"
+               id="duration"
+               name="duration"
+               inputmode="numeric"
+               pattern="[0-9]{1,2}:[0-9]{2}"
+               placeholder="e.g., 01:15">
+      </div>
 
-<body>
-
-
-<div class="form">
-    <form action="/windput" method ="post">
-        <label for="sessiontimestart">Enter your session details below:</label>
-
-       
-
-<form action="/form" method="post">
-	<div class="container">
-		<div class="row">
-		  <div class="col">
-	  
-			
-			
-	  
-			<form action="/sign-up" method="POST">
-
-			<br>
-	  
-			<div class="form-group">
-				<h4><label>Date and start time in this first box</label></h4>
-				<input type="datetime-local" class="form-control" id="sessiondatetime" name="sessiondatetime" placeholder="enter date and start time">
-			</div>
-	  
-			<br>
-			  
-			<div class="form-group">
-				<h4><label>Duration here format HH:MM</label></h4>
-				<input type="text" class="form-control" id="duration" name="duration" placeholder="ENTER SESSION DURATION   HH:MM">
-			
-			</div>
-			
-			<br>
-
-			<div class="container">
-				<button type="submit" class="btn btn-primary">See what the wind was --</button>
-			</div>
-</form>
-
-</body>
-
-
-
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">See what the wind was →</button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

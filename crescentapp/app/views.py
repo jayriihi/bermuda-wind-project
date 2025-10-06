@@ -145,27 +145,33 @@ def _fmt_hhmm(x):
 
 @app.route("/winds/<int:hours>")
 def winds(hours: int):
-    # ---- wind (yours)
     labels, values, avg, maxv, minv, dirv = fetch_winds(hours)
 
-    # ---- tide
     tide_ok = True
     tide_error_msg = None
     try:
         (flow_state_beg, prev_peak_time, prev_peak_state, prev_peak_ht,
          next_peak_time,  next_peak_state,  next_peak_ht) = tide_now.get_tide_data_for_now()
 
-        # display-friendly values
-        next_peak_state_disp = "High" if next_peak_state == "H" else (
-                               "Low"  if next_peak_state == "L" else str(next_peak_state))
+        def _fmt_hhmm(x):
+            try:
+                return x.strftime("%H:%M")
+            except Exception:
+                return "—"
+
+        prev_peak_time_disp = _fmt_hhmm(prev_peak_time)
         next_peak_time_disp = _fmt_hhmm(next_peak_time)
 
+        prev_peak_state_disp = "High" if prev_peak_state == "H" else (
+                               "Low"  if prev_peak_state == "L" else str(prev_peak_state))
+        next_peak_state_disp = "High" if next_peak_state == "H" else (
+                               "Low"  if next_peak_state == "L" else str(next_peak_state))
     except Exception as e:
         print(f"[tide] {e}")
         tide_ok = False
         tide_error_msg = "Tide data temporarily unavailable."
-        next_peak_state_disp = None
-        next_peak_time_disp  = None
+        flow_state_beg = prev_peak_time_disp = prev_peak_state_disp = None
+        next_peak_time_disp = next_peak_state_disp = None
 
     return render_template(
         "wind_tide.html",
@@ -176,11 +182,14 @@ def winds(hours: int):
         past_hour_avg_wind_max=maxv,
         past_hour_avg_wind_min=minv,
         avg_wind_dir=dirv,
-        # tide context for the template
         tide_ok=tide_ok,
         tide_error_msg=tide_error_msg,
-        next_peak_state=next_peak_state_disp,
+        flow_state_beg=flow_state_beg,
+        prev_peak_time=prev_peak_time_disp,
+        prev_peak_state=prev_peak_state_disp,
         next_peak_time=next_peak_time_disp,
+        next_peak_state=next_peak_state_disp,
+        is_modeled=False,   # explicit default for this route (Pearl real data)
     )
 
 
@@ -341,7 +350,7 @@ def wind():
     )
 
     return render_template(
-        "wind.html",
+        "sesh_wind.html",
         value_avg=avg_wind_spd,
         value_max=wind_max,
         value_min=wind_min,

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 {% set H = hours|default(1)|int %}
+{% set is_modeled = is_modeled|default(false) %}
+
 
 <style>
   /* ——— Palette ——— */
@@ -295,12 +297,137 @@ h1::after{
   .chartBox.tide{ height:220px; }
 }
 
+/* --- Dark page + card helpers --- */
+
+.page-wrap{ max-width:var(--page-max,1100px); margin:0 auto; padding:12px; }
+.card-dark{
+  background:var(--panel,#0f2238); color:var(--panel-text,#e6eef8);
+  border:1px solid var(--panel-stroke,rgba(255,255,255,.14));
+  border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,.25);
+  padding:clamp(14px,2.6vw,26px);
+}
+.title{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.title h2{ margin:0; font-size:clamp(18px,2.2vw,26px); }
+.meta{ opacity:.9; font-size:.95rem; display:flex; gap:10px; align-items:center; }
+.badge{ padding:2px 8px; border-radius:999px; font-size:.75rem; border:1px solid var(--aqua); color:var(--aqua); }
+
+/* --- Stat row: 4-up desktop, single-row swipe on mobile --- */
+.stat-grid{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);  /* always 4 across */
+  gap: 10px;                               /* tighter gap */
+  margin-top: 12px;
+}
+
+.stat{
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--panel-stroke, rgba(255,255,255,.14));
+  border-radius: 10px;
+  padding: 8px 10px;                        /* compact padding */
+}
+
+.stat .label{
+  font-size: .72rem;                        /* smaller label */
+  line-height: 1.05;
+  opacity: .85;
+}
+
+.stat .value{
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-size: clamp(0.95rem, 3.0vw, 1.35rem); /* scales down on small screens */
+}
+
+/* Make units smaller so numbers stay readable */
+.stat .value .u{
+  font-weight: 700;
+  opacity: .9;
+  font-size: .82em;                         /* e.g., “kt”, “°” slightly smaller */
+  margin-left: 2px;
+}
+
+/* Slight extra squeeze for small phones */
+@media (max-width: 400px){
+  .stat-grid{ gap: 8px; }
+  .stat{ padding: 7px 8px; border-radius: 9px; }
+  .stat .label{ font-size: .68rem; }
+  .stat .value{ font-size: clamp(0.9rem, 3.2vw, 1.2rem); }
+}
+
+/* Last-resort fallback: horizontal scroll only on very narrow devices */
+@media (max-width: 340px){
+  .stat-grid{
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;                       /* enable swipe only here */
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    scroll-snap-type: x proximity;
+  }
+  .stat{ flex: 0 0 160px; scroll-snap-align: start; }
+  .stat .value{ font-size: 0.98rem; }
+}
+
+
+.chart-wrap{ margin-top:16px; background:rgba(255,255,255,.04);
+             border:1px solid var(--panel-stroke,rgba(255,255,255,.14));
+             border-radius:14px; padding:10px 12px; }
+
+.tide-summary { margin-top:16px; padding-top:12px; display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; font-size:.95rem; }
+.tide-summary.dotted { border-top:1px dashed var(--panel-stroke, rgba(255,255,255,.18)); }
+
+/* Page background to match sesh_wind */
+:root { --bg: #edf2f7; }
+body  { background: var(--bg) !important; }
+
+/* One consistent page container */
+.page-wrap{
+  max-width: var(--page-max, 1100px);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Neutralize Bootstrap .container width inside our page-wrap */
+.page-wrap .container{
+  width: 100%;
+  max-width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+  margin: 0;
+}
+
+/* Trim chart framing to a single thin border */
+.chart-wrap{
+  padding: 0;                     /* no cushion layer */
+  background: transparent;
+  border: none;                   /* remove outer border */
+}
+
+.chartBox{
+  padding: 0;                     /* canvas hugs the box */
+  border: 1px solid rgba(255,255,255,.14);   /* single thin ring */
+  border-radius: 12px;            /* a bit tighter */
+}
+
+.chartBox canvas{
+  border-radius: inherit;         /* match rounded corners */
+}
+
+/* Even tighter on phones */
+@media (max-width: 640px){
+  .chartBox{ border-radius: 10px; }
+}
+
+
+
 
 </style>
 
 <!-- Header / menu -->
-<div class="periodMenu">
-  <div class="container">
+<div class="page-wrap">
+  <div class="periodMenu">
     <center>
       <p>Recent winds at <a href="/crescent">Crescent</a></p>
       <div class="btn-group">
@@ -308,39 +435,41 @@ h1::after{
         <a class="btn btn-primary {{ 'active' if H==3 else '' }}" href="{{ url_for('winds', hours=3) }}">3 hours</a>
         <a class="btn btn-primary {{ 'active' if H==8 else '' }}" href="{{ url_for('winds', hours=8) }}">8 hours</a>
       </div>
-      
     </center>
   </div>
 </div>
 
 <!-- Summary numbers -->
-<div class="windTable">
-  <div class="container">
-    <table>
-      <thead>
-        <tr><th>Avg</th><th>Max</th><th>Min</th><th>Dir</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>{{ past_hour_avg_wind_spd|round(1) }}</td>
-          <td>{{ past_hour_avg_wind_max|round(1) }}</td>
-          <td>{{ past_hour_avg_wind_min|round(1) }}</td>
-          <td>{{ avg_wind_dir }}</td>
-        </tr>
-      </tbody>
-    </table>
+<div class="page-wrap">
+  <div class="card-dark">
+    <div class="title">
+      <h2>Past {{ H }} hour{{ 's' if H>1 else '' }}</h2>
+      <div class="meta">
+        <span>Upwindsports · Crescent</span>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="label">Avg</div><div class="value">{{ past_hour_avg_wind_spd|round(1) }} kt</div></div>
+      <div class="stat"><div class="label">Max</div><div class="value">{{ past_hour_avg_wind_max|round(1) }} kt</div></div>
+      <div class="stat"><div class="label">Min</div><div class="value">{{ past_hour_avg_wind_min|round(1) }} kt</div></div>
+      <div class="stat"><div class="label">Dir (avg)</div><div class="value">{{ avg_wind_dir }}°</div></div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chartBox {{ 'tall' if H >= 3 else '' }}">
+        <canvas id="myChart"></canvas>
+      </div>
+    </div>
+    <!-- end add -->
   </div>
 </div>
 
+
+
+
+
 <!-- Charts -->
-<!-- Charts (centered, consistent width) -->
-<div class="page stack">
-  <div class="chartBox {{ 'tall' if H >= 3 else '' }}">
-    <canvas id="myChart"></canvas>
-  </div>
-
-
-
 <!-- Libraries -->
 <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.4.4/d3.min.js"
@@ -420,12 +549,23 @@ h1::after{
 
   <!-- Tide chart (uniform look + dark-card shading) -->
   {% if tide_ok %}
-  <div class="chartBox tide">
-    <canvas id="myChartTide"></canvas>
+  <div class="page-wrap">
+    <div class="card-dark">
+      <div class="chart-wrap">
+        <div class="chartBox tide">
+          <canvas id="myChartTide"></canvas>
+        </div>
+      </div>
+  
+      <div class="tide-summary dotted">
+        <div><strong>Prev:</strong> {{ 'High' if prev_peak_state=='H' else ('Low' if prev_peak_state=='L' else prev_peak_state) }} at {{ prev_peak_time }}</div>
+        <div><strong>Tide (now):</strong> {{ flow_state_beg }}</div>        
+        <div><strong>Next:</strong> {{ next_peak_state }} at {{ next_peak_time }}</div>
+      </div>
+    </div>
   </div>
-  <div class="text-center" style="margin-top:8px;">
-    <p class="next-tide">Next tide is {{ next_peak_state }} at {{ next_peak_time }}</p>
-  </div>
+  {% endif %}
+  
 
   <script>
   (function () {
@@ -529,8 +669,6 @@ h1::after{
     });
   })();
   </script>
-{% endif %}
-
 
 <!-- Bootstrap JS (optional; your base.html may already include these) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
