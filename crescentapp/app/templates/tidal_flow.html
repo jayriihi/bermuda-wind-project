@@ -8,69 +8,146 @@ Bermuda Tidal Flow
 {% block content %}
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Tidal Flow</title>
 
-  <!-- ✅ Load Chart.js BEFORE your chart scripts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <script src="https://cdn.jsdelivr.net/npm/date-fns-tz"></script>
   <script src="https://unpkg.com/chartjs-plugin-annotation@1.0.2"></script>
+
+  <style>
+    :root{
+      --panel:#0f2238; --panel-text:#e6eef8; --panel-stroke:rgba(255,255,255,.14);
+      --page-max:1100px;
+    }
+    .chart-card{
+      max-width: var(--page-max);
+      margin: 10px auto 16px;
+      background: var(--panel);
+      color: var(--panel-text);
+      border:1px solid var(--panel-stroke);
+      border-radius:18px;
+      box-shadow:0 10px 28px rgba(0,0,0,.28);
+      overflow:hidden;
+    }
+    .card-header{
+      padding:12px 16px 8px;
+      text-align:center;
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+    .card-header h2{
+      margin:0;
+      font-weight:600;
+      font-size:1.35rem;
+      color: var(--panel-text);
+    }
+    .card-body{ padding: 10px 12px; }
+    .card-body canvas{ width:100% !important; height:56vh !important; }
+    .card-footer{
+      padding:12px;
+      display:flex; flex-wrap:wrap; gap:10px; justify-content:center;
+      border-top:1px solid rgba(255,255,255,.08);
+    }
+    .pill{
+      padding:6px 10px; border-radius:10px; font-size:.9rem;
+      color:#0f2238; background:#b9e1f2; border:1px solid rgba(0,0,0,.06);
+    }
+    .pill.light  { background:#7bcde8; }
+    .pill.mid    { background:#2fa8dd; color:white; }
+    .pill.strong { background:#f4a261; color:#242424; }
+    .pill.vstrong{ background:#e63946; color:white; }
+    .pill.extreme{ background:#a4161a; color:white; }
+    @media (max-width:768px){
+      .card-body canvas{ height:48vh !important; }
+    }
+    @media (max-width:480px){
+      .card-header h2{ font-size:1.1rem; }
+      .card-body canvas{ height:44vh !important; }
+      .pill{ font-size:.8rem; padding:5px 8px; }
+    }
+  </style>
 </head>
 
 <body>
-  <h2 style="text-align:center; font-weight:500; font-size:1.6rem; margin-bottom:0;">
-    Tidal Flow (Bars) & Tide Height (Line)
-  </h2>
+  <div class="chart-card">
+    <div class="card-header">
+      <h2>Tidal Flow (Bars) &amp; Tide Height (Line)</h2>
+    </div>
 
-  <!--<canvas id="flowChart" height="250"></canvas>
-  <canvas id="heightChart" height="250"></canvas>-->
-  <canvas id="slopeChart" height="100"></canvas>
+    <div class="card-body">
+      <canvas id="slopeChart"></canvas>
+    </div>
 
+    <div class="card-footer">
+      <span class="pill">Very Weak <small>(0–25th %)</small></span>
+      <span class="pill light">Weak <small>(25–50th %)</small></span>
+      <span class="pill mid">Moderate <small>(50–75th %)</small></span>
+      <span class="pill strong">Strong <small>(75–95th %)</small></span>
+      <span class="pill vstrong">Very Strong <small>(95–99th+ %)</small></span>
+      <span class="pill extreme">Extreme <small>(99th+ %)</small></span>
+    </div>
+  </div>
 
 
   <script>
-    const thresholds = JSON.parse('{{ thresholds_json | safe }}');
-    const flowData = JSON.parse('{{ flow_data_json | safe }}');
-    const heightData = JSON.parse('{{ height_data_json | safe }}');
-    console.log("RAW slopeData JSON:", `{{ slope_data_json | safe }}`);
-    const slopeData = JSON.parse('{{ slope_data_json | safe }}'); // NEW
-    const maxSlope = JSON.parse('{{ max_slope_json | safe }}');
-    const fixedMaxY = 0.35;  // headroom-added y-axis cap
+  document.addEventListener('DOMContentLoaded', () => {
+    try {
+      const slopeEl = document.getElementById('slopeChart');
+      if (!slopeEl) { console.error('slopeChart canvas not found'); return; }
 
-    const colorMap = {
-      "very weak": "#b9e1f2",
-      "weak": "#7bcde8",
-      "moderate": "#2fa8dd",
-      "strong": "#f4a261",
-      "very strong": "#e63946",
-      "extreme": "#a4161a",     // red
-    };
+      // ---- Data from Jinja ----
+      const thresholds = JSON.parse('{{ thresholds_json | safe }}');
+      const slopeData  = JSON.parse('{{ slope_data_json | safe }}');
+      const heightData = JSON.parse('{{ height_data_json | safe }}');
+      const fixedMaxY  = 0.35;
 
+      if (!Array.isArray(slopeData) || slopeData.length === 0) {
+        console.error('No slopeData – check your template vars'); return;
+      }
+      if (!Array.isArray(heightData) || heightData.length === 0) {
+        console.error('No heightData – check your template vars'); return;
+      }
+      if (!thresholds || thresholds.length !== 5) {
+        console.warn('Thresholds missing or wrong length:', thresholds);
+      }
 
+      const colorMap = {
+        "very weak": "#b9e1f2",
+        "weak": "#7bcde8",
+        "moderate": "#2fa8dd",
+        "strong": "#f4a261",
+        "very strong": "#e63946",
+        "extreme": "#a4161a",
+      };
 
-    if (thresholds?.length === 5) {
-      console.log("Chart slopeData sample:", slopeData.slice(0, 3));
-      console.log("Chart heightData sample:", heightData.slice(0, 3));
+      const isPhone  = window.matchMedia("(max-width: 480px)").matches;
+      const isTablet = window.matchMedia("(max-width: 768px)").matches && !isPhone;
 
-      const slopeCtx = document.getElementById('slopeChart').getContext('2d');
-      new Chart(slopeCtx, {
+      const containerW = slopeEl.parentElement?.clientWidth || 800;
+      const approxPoints = slopeData.length;
+      const barThickness = Math.max(2, Math.min(10, Math.floor(containerW / (approxPoints * 1.6))));
+
+      const tickColor = '#e6eef8';                 // text on dark
+      const gridColor = 'rgba(255,255,255,.10)';   // subtle grid
+
+      new Chart(slopeEl.getContext('2d'), {
         type: 'bar',
         data: {
           datasets: [
             {
               label: 'Tide Flow (m/hr)',
               data: slopeData.map(p => ({ x: p.time, y: p.slope })),
-              backgroundColor: slopeData.map(p => {
-                const baseColor = colorMap[p.strength] || '#ccc';
-                return baseColor.replace('rgb', 'rgba').replace(')', ', 1.0)');
-              }),
+              backgroundColor: slopeData.map(p => colorMap[p.strength] || '#7bcde8'),
               yAxisID: 'y',
-              type: 'bar'
+              type: 'bar',
+              barThickness,
+              maxBarThickness: barThickness,
             },
             {
               label: 'Tide Height',
               data: heightData.map(p => ({ x: p.time, y: p.height })),
-              borderColor: 'grey',
+              borderColor: '#cfd6df',
               borderWidth: 2,
               fill: false,
               pointRadius: 0,
@@ -78,73 +155,60 @@ Bermuda Tidal Flow
               yAxisID: 'y',
               type: 'line'
             }
-
           ]
-
         },
         options: {
+          responsive: true,
+          maintainAspectRatio: false,   // height is set by CSS
+          interaction: { mode: 'index', intersect: false },
           scales: {
             y: {
               min: -fixedMaxY,
               max: fixedMaxY,
-              ticks: {
-                stepSize: 0.05
-              },
-              title: {
-                display: true,
-                text: 'Rate of Change (m/hr)'
-              }
+              grid: { color: gridColor },
+              ticks: { stepSize: 0.05, color: tickColor },
+              title: { display: !isPhone, text: 'Rate of Change (m/hr)', color: tickColor }
             },
             x: {
               type: 'time',
               time: {
-                zone: 'America/Bermuda',  // ✅ auto handles DST!
-                displayFormats: {
-                  hour: 'EEE d MMM ha'  // e.g. "12 Apr 11AM"
-                },
-                tooltipFormat: 'EEE d MMM , h:mm a'  // optional: more detail in tooltips
+                zone: 'America/Bermuda',
+                displayFormats: isPhone ? { hour: 'EEE ha' } : { hour: 'EEE d MMM ha' },
+                tooltipFormat: 'EEE d MMM, h:mm a'
               },
+              grid: { color: 'rgba(255,255,255,.05)' },
               ticks: {
                 autoSkip: true,
-                maxRotation: 45,
-                minRotation: 30
+                maxTicksLimit: isPhone ? 5 : (isTablet ? 9 : 14),
+                maxRotation: isPhone ? 0 : (isTablet ? 20 : 45),
+                minRotation: isPhone ? 0 : (isTablet ? 20 : 45),
+                color: tickColor
               },
-              title: {
-                display: true,
-                text: 'Date and Time'
-              }
+              title: { display: !isPhone, text: 'Date and Time', color: tickColor }
             }
           },
           plugins: {
+            legend: { display: false },  // using the footer pills instead
             tooltip: {
               callbacks: {
-                label: function (context) {
-                  const dataPoint = slopeData[context.dataIndex];
-                  const strength = dataPoint.strength?.replace(/\b\w/g, l => l.toUpperCase()) || "Unknown";
-                  return `Flow Strength: ${strength}`;
+                label: (ctx) => {
+                  if (ctx.dataset.type === 'line') return `Height: ${ctx.parsed.y.toFixed(2)} m`;
+                  const p = slopeData[ctx.dataIndex];
+                  const strength = (p?.strength || 'unknown').replace(/\b\w/g, l => l.toUpperCase());
+                  return `Flow: ${ctx.parsed.y.toFixed(3)} m/hr • ${strength}`;
                 }
               }
             }
           }
         }
-
       });
-    } else {
-      console.error('Thresholds not loaded correctly:', thresholds);
+    } catch (err) {
+      console.error('Chart init failed:', err);
     }
-
-
+  });
   </script>
 
-  <div style="margin-top:20px; margin-bottom:30px; text-align:center;">
-    <span style="background-color:#b9e1f2; padding:4px;">Very Weak <small>(0–25th %)</small></span>
-    <span style="background-color:#7bcde8; padding:4px;">Weak <small>(25–50th %)</small></span>
-    <span style="background-color:#2fa8dd; padding:4px; color:white;">Moderate <small>(50–75th %)</small></span>
-    <span style="background-color:#f4a261; padding:4px;">Strong <small>(75–95th %)</small></span>
-    <span style="background-color:#e63946; padding:4px; color:white;">Very Strong <small>(95–99th+ %)</small></span>
-    <span style="background-color:#a4161a; padding:4px; color:white;">Extreme <small>(99th+ %)</small></span>
-    <!-- 🆕 -->
-  </div>
-
 </body>
+
+
 {% endblock %}

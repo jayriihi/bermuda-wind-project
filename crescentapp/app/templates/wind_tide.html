@@ -415,12 +415,16 @@ body  { background: var(--bg) !important; }
   border-radius: inherit;         /* match rounded corners */
 }
 
-/* Even tighter on phones */
-@media (max-width: 640px){
-  .chartBox{ border-radius: 10px; }
+/* --- final mobile trim (place at end) --- */
+@media (max-width:640px){
+  /* slightly smaller space between the two cards */
+  .stack{ gap: 8px; }                 /* was 12px via :root --gap */
+
+  /* shave chart heights a touch */
+  .chartBox{ height:170px !important; padding: 2px 4px; }
+  .chartBox.tall,
+  .chartBox.tide{ height:160px !important; }   /* tide a hair shorter */
 }
-
-
 
 
 </style>
@@ -443,9 +447,9 @@ body  { background: var(--bg) !important; }
 <div class="page-wrap">
   <div class="card-dark">
     <div class="title">
-      <h2>Past {{ H }} hour{{ 's' if H>1 else '' }}</h2>
+      <h2>Past {{ H }}hr{{ 's' if H>1 else '' }}</h2>
       <div class="meta">
-        <span>Upwindsports · Crescent</span>
+        <span></span>
       </div>
     </div>
 
