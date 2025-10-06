@@ -78,7 +78,7 @@ def homepage():
 
     # --- render (still inside homepage) ---
     return render_template(
-        "graph_temp_info_tide_chart.html",
+        "wind_tide.html",
         labels=labels,
         values=series,
         past_hour_avg_wind_spd=past_hour_avg_wind_spd,
@@ -99,8 +99,102 @@ def homepage():
         is_modeled=(source_sheet == "pred_cresc"),
     )
 
+# views.py
 
-@app.route("/graph_1hr")
+def fetch_winds(hours: int):
+    """
+    Use your existing helpers:
+      pearl_1hr_quik(), pearl_3hr_quik(), pearl_8hr_quik()
+    Fall back to _pearl_quik(hours) if a wrapper isn't present.
+    Returns (labels, values, avg, maxv, minv, dirv).
+    """
+    # Try the explicit wrapper first, e.g. pearl_3hr_quik
+    fn = getattr(wind_data_functionsc, f"pearl_{hours}hr_quik", None)
+
+    if fn is not None:
+        avg, maxv, minv, dirv, labels, series = fn()
+    elif hasattr(wind_data_functionsc, "_pearl_quik"):
+        # Generic path with hours
+        avg, maxv, minv, dirv, labels, series = wind_data_functionsc._pearl_quik(hours)
+    else:
+        # Absolute fallback so the page still renders
+        avg, maxv, minv, dirv, labels, series = wind_data_functionsc.pearl_1hr_quik()
+
+    # Template expects labels/values plus summary numbers
+    return labels, series, avg, maxv, minv, dirv
+
+
+from app.modules import tide_now  # you already have this import
+
+def _as_dt(x):
+    """Coerce pandas.Timestamp to datetime for strftime."""
+    try:
+        import pandas as pd
+        if isinstance(x, pd.Timestamp):
+            return x.to_pydatetime()
+    except Exception:
+        pass
+    return x
+
+def _fmt_hhmm(x):
+    x = _as_dt(x)
+    try:
+        return x.strftime("%H:%M")  # or "%-I:%M %p" for 12-hour
+    except Exception:
+        return "–"
+
+@app.route("/winds/<int:hours>")
+def winds(hours: int):
+    # ---- wind (yours)
+    labels, values, avg, maxv, minv, dirv = fetch_winds(hours)
+
+    # ---- tide
+    tide_ok = True
+    tide_error_msg = None
+    try:
+        (flow_state_beg, prev_peak_time, prev_peak_state, prev_peak_ht,
+         next_peak_time,  next_peak_state,  next_peak_ht) = tide_now.get_tide_data_for_now()
+
+        # display-friendly values
+        next_peak_state_disp = "High" if next_peak_state == "H" else (
+                               "Low"  if next_peak_state == "L" else str(next_peak_state))
+        next_peak_time_disp = _fmt_hhmm(next_peak_time)
+
+    except Exception as e:
+        print(f"[tide] {e}")
+        tide_ok = False
+        tide_error_msg = "Tide data temporarily unavailable."
+        next_peak_state_disp = None
+        next_peak_time_disp  = None
+
+    return render_template(
+        "wind_tide.html",
+        hours=hours,
+        labels=labels,
+        values=values,
+        past_hour_avg_wind_spd=avg,
+        past_hour_avg_wind_max=maxv,
+        past_hour_avg_wind_min=minv,
+        avg_wind_dir=dirv,
+        # tide context for the template
+        tide_ok=tide_ok,
+        tide_error_msg=tide_error_msg,
+        next_peak_state=next_peak_state_disp,
+        next_peak_time=next_peak_time_disp,
+    )
+
+
+# legacy links mapped to the unified view
+@app.route("/graph_3hr")
+def graph_3hr():
+    return winds(3)
+
+@app.route("/graph_8hr")
+def graph_8hr():
+    return winds(8)
+
+
+'''@app.route("/graph_1hr")
 def graph_1hr():
     (
         avg_wind_spd,
@@ -176,7 +270,7 @@ def graph_8hr():
     past_hour_avg_wind_max=past_hour_avg_wind_max_disp,
     past_hour_avg_wind_min=past_hour_avg_wind_min_disp,
     avg_wind_dir=avg_wind_dir_disp,
-    )
+    )'''
 
 @app.route("/windput", methods=["POST", "GET"])
 # takes the post intputs fromer user on windput page makes them into session variables
