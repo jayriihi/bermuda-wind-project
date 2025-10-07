@@ -1,12 +1,19 @@
 import requests
-from flask import render_template, request, session, jsonify, Flask, redirect, url_for
-from app.modules import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
-from app import app
 from datetime import datetime, timedelta
+from flask import render_template, request, session, jsonify, Flask, redirect, url_for
 
-# from collections import Counter
-# import pandas as pd
-# import json
+# Import the Flask app object (relative first, absolute fallback)
+try:
+    from . import app
+except ImportError:
+    from app import app  # works with your current PythonAnywhere WSGI
+
+# Try subpackage first (local), then flat (PythonAnywhere)
+try:
+    from .modules import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
+except ImportError:
+    from . import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
+
 
 
 @app.route("/")
@@ -281,7 +288,7 @@ def graph_8hr():
     avg_wind_dir=avg_wind_dir_disp,
     )'''
 
-@app.route("/windput", methods=["POST", "GET"])
+'''@app.route("/windput", methods=["POST", "GET"])
 # takes the post intputs fromer user on windput page makes them into session variables
 def windput():
     if request.method == "POST":
@@ -305,7 +312,47 @@ def windput():
 
     else:
         return_val = render_template("windput.html")
-        return return_val
+        return return_val'''
+
+from datetime import datetime
+
+def _parse_dt(s):
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            pass
+    return None
+
+@app.route("/windput", methods=["POST", "GET"])
+def windput():
+    if request.method == "POST":
+        dt_raw = request.form.get("sessiondatetime", "").strip()
+        dt = _parse_dt(dt_raw)
+        if not dt:
+            # choose: flash error, or default to now
+            # return render_template("windput.html", error="Please enter a start time.")
+            dt = datetime.now()
+
+        session["sessiondatetime"] = dt.strftime("%Y-%m-%dT%H:%M")
+
+        dur_raw = request.form.get("duration", "0:00")
+        try:
+            h_str, m_str = dur_raw.split(":", 1)
+            h, m = int(h_str), int(m_str)
+        except Exception:
+            h, m = 0, 0
+        m = max(0, min(59, m))
+        session["duration"] = f"{h}:{m:02d}"
+        session["duration_minutes"] = h * 60 + m
+
+        return wind()
+
+    return render_template("windput.html")
+
+
 
 
 @app.route("/wind")
