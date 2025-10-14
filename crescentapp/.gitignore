@@ -1,0 +1,4 @@
+# local template backups
+/app/templates/*bakup*.html
+/app/templates/*backup*.html
+/app/templates/* copy.html
