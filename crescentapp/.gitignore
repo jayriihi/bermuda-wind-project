@@ -2,3 +2,7 @@
 /app/templates/*bakup*.html
 /app/templates/*backup*.html
 /app/templates/* copy.html
+/health_data/
+/app/templates/*bakup*.html
+/app/templates/*backup*.html
+/app/templates/* copy.html
