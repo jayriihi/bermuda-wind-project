@@ -101,3 +101,11 @@ INPUT/**
 # Trained/binary models – ignore unless you decide to use Git LFS
 *.pkl
 *.joblib
+
+# stop tracking backup files
+
+# local backup artifacts
+crescentapp/app/templates/*bakup*
+crescentapp/app/templates/*backup*
+*.bak
+*.old
