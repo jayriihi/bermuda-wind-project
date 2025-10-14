@@ -131,8 +131,6 @@ def fetch_winds(hours: int):
     return labels, series, avg, maxv, minv, dirv
 
 
-from app.modules import tide_now  # you already have this import
-
 def _as_dt(x):
     """Coerce pandas.Timestamp to datetime for strftime."""
     try:
