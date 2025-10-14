@@ -53,3 +53,51 @@ images/
 
 #garmin fit sdk files
 health_data/FitSDKRelease_21.158.00/
+
+# --- SWAN / model runs (outputs, scratch, logs) ---
+**/PRINT/
+**/OUTPUT/
+**/GRAPH/
+**/RUNDATA/
+**/work/
+**/TMP*/
+
+# Common SWAN run files
+**/Errfile
+**/errfile
+**/swan*.log
+**/swan*.out
+**/swan*.prt
+**/SWANOUT*
+**/SWAN*.TAB
+**/*.prt
+
+# If you keep a raw data folder, ignore the bulk but allow small configs:
+INPUT/**
+!INPUT/*.in
+!INPUT/*.cfg
+!INPUT/*.txt
+!INPUT/README.md
+# (Remove the ! rules above if you want to ignore the entire INPUT folder)
+
+# Big science/geo/data products (generated)
+*.nc
+*.grb
+*.grib
+*.grib2
+*.hdf
+*.h5
+*.npz
+*.parquet
+*.feather
+*.tif
+*.tiff
+*.kmz
+*.kml
+*.shp
+*.shx
+*.dbf
+
+# Trained/binary models – ignore unless you decide to use Git LFS
+*.pkl
+*.joblib
