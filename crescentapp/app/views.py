@@ -189,8 +189,17 @@ def winds(hours: int):
         flow_state_beg = prev_peak_time_disp = prev_peak_state_disp = None
         next_peak_time_disp = next_peak_state_disp = None
 
+        # ---- 3h wind direction for vertical chart (safe + JSON-friendly) ----
+    try:
+        wd_labels_raw, wd_dirs_raw = wind_data_functionsc.wind_dir_3hours()
+        wd_labels = [str(t) for t in wd_labels_raw]                 # strings/ISO ok
+        wd_dirs   = [float(d) for d in wd_dirs_raw if d is not None]  # 0–360 floats
+    except Exception as e:
+        print(f"[wind_dir_vert] {e}")
+        wd_labels, wd_dirs = [], []
+
     return render_template(
-        "wind_tide.html",
+        "wind_tide_dir.html",
         hours=hours,
         labels=labels,
         values=values,
@@ -205,7 +214,9 @@ def winds(hours: int):
         prev_peak_state=prev_peak_state_disp,
         next_peak_time=next_peak_time_disp,
         next_peak_state=next_peak_state_disp,
-        is_modeled=False,   # explicit default for this route (Pearl real data)
+        is_modeled=False,
+        wd_labels=wd_labels,          
+        wd_dirs=wd_dirs,     # explicit default for this route (Pearl real data)
     )
 
 
