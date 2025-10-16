@@ -83,9 +83,18 @@ def homepage():
         prev_peak_time_str = "—"
         next_peak_time_str = "—"
 
+    # ---- 3h wind direction for vertical chart (safe + JSON-friendly) ----
+    try:
+        wd_labels_raw, wd_dirs_raw = wind_data_functionsc.wind_dir_3hours()
+        wd_labels = [str(t) for t in wd_labels_raw]                 # strings/ISO ok
+        wd_dirs   = [float(d) for d in wd_dirs_raw if d is not None]  # 0–360 floats
+    except Exception as e:
+        print(f"[wind_dir_vert] {e}")
+        wd_labels, wd_dirs = [], []
+
     # --- render (still inside homepage) ---
     return render_template(
-        "wind_tide.html",
+        "wind_tide_dir.html",
         labels=labels,
         values=series,
         past_hour_avg_wind_spd=past_hour_avg_wind_spd,
@@ -104,6 +113,8 @@ def homepage():
         next_peak_ht=next_peak_ht,
         # wind source badge
         is_modeled=(source_sheet == "pred_cresc"),
+        wd_labels=wd_labels,          
+        wd_dirs=wd_dirs,              
     )
 
 # views.py
