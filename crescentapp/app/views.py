@@ -1,48 +1,39 @@
 import requests
 from datetime import datetime, timedelta
-from flask import render_template, request, session, jsonify, Flask, redirect, url_for
+from flask import render_template, request, session, jsonify, redirect, url_for
 
-# Import the Flask app object (relative first, absolute fallback)
-try:
-    from . import app
-except ImportError:
-    from app import app  # works with your current PythonAnywhere WSGI
+from app import app
+from app.modules import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
 
-# Try subpackage first (local), then flat (PythonAnywhere)
-try:
-    from .modules import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
-except ImportError:
-    from . import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
 
 
 
 @app.route("/")
 @app.route("/home")
 def homepage():
-    # --- test switch (leave False in prod) ---
-    force_error = False
-    if force_error:
-        print("Simulated error: Redirecting to the error page.")
-        return redirect(url_for("error_2"))
+    # --- wind via wrapper (module switch controls source) ---
+    res, source_sheet = wind_data_functionsc.fetch_auto_pearl_then_pred()
 
-    # --- wind: Pearl first, fallback to pred_cresc if stale/failed ---
-    (avg_wind_spd, wind_max, wind_min, avg_wind_dir, labels, series), source_sheet = (
-        wind_data_functionsc.fetch_auto_pearl_then_pred()
-    )
+    # safety
+    if not (isinstance(res, tuple) and len(res) == 6):
+        res = (None, None, None, None, [], [])
+    avg_wind_spd, wind_max, wind_min, avg_wind_dir, labels, series = res
 
+    # bail to error page if wind failed hard
     if (avg_wind_spd is None) or (not series):
         print("Wind fetch failed after fallback. Redirecting to error_2.")
         return redirect(url_for("error_2"))
 
-    # Round/format for display
-    past_hour_avg_wind_spd = round(avg_wind_spd, 1)
-    past_hour_avg_wind_max = int(round(wind_max))
-    past_hour_avg_wind_min = int(round(wind_min))
-    avg_wind_dir_disp = int(round(avg_wind_dir))
+    # safe rounding
+    def sround(x, nd=0):
+        return None if x is None else round(float(x), nd)
 
-    # --- tide ---
+    past_hour_avg_wind_spd = sround(avg_wind_spd, 1)
+    past_hour_avg_wind_max = int(sround(wind_max, 0)) if wind_max is not None else None
+    past_hour_avg_wind_min = int(sround(wind_min, 0)) if wind_min is not None else None
+    avg_wind_dir_disp      = int(sround(avg_wind_dir, 0)) if avg_wind_dir is not None else None
 
-    # --- tide: graceful with optional forced failure ---
+    # --- tide (unchanged) ---
     def _fmt_hhmm(x):
         try:
             return x.strftime("%H:%M")
@@ -51,7 +42,7 @@ def homepage():
 
     tide_ok = True
     tide_error_msg = None
-    force_tide_error = request.args.get("tide_test") == "1"  # e.g., /home?tide_test=1
+    force_tide_error = request.args.get("tide_test") == "1"
 
     try:
         if force_tide_error:
@@ -83,16 +74,15 @@ def homepage():
         prev_peak_time_str = "—"
         next_peak_time_str = "—"
 
-    # ---- 3h wind direction for vertical chart (safe + JSON-friendly) ----
+    # ---- 3h wind direction for vertical chart ----
     try:
         wd_labels_raw, wd_dirs_raw = wind_data_functionsc.wind_dir_3hours()
-        wd_labels = [str(t) for t in wd_labels_raw]                 # strings/ISO ok
-        wd_dirs   = [float(d) for d in wd_dirs_raw if d is not None]  # 0–360 floats
+        wd_labels = [str(t) for t in wd_labels_raw]
+        wd_dirs   = [float(d) for d in wd_dirs_raw if d is not None]
     except Exception as e:
         print(f"[wind_dir_vert] {e}")
         wd_labels, wd_dirs = [], []
 
-    # --- render (still inside homepage) ---
     return render_template(
         "wind_tide_dir.html",
         labels=labels,
@@ -101,7 +91,6 @@ def homepage():
         past_hour_avg_wind_min=past_hour_avg_wind_min,
         past_hour_avg_wind_max=past_hour_avg_wind_max,
         avg_wind_dir=avg_wind_dir_disp,
-        # tide
         tide_ok=tide_ok,
         tide_error_msg=tide_error_msg,
         flow_state_beg=flow_state_beg,
@@ -111,13 +100,46 @@ def homepage():
         next_peak_time=next_peak_time_str,
         next_peak_state=tide_state_full,
         next_peak_ht=next_peak_ht,
-        # wind source badge
         is_modeled=(source_sheet == "pred_cresc"),
-        wd_labels=wd_labels,          
-        wd_dirs=wd_dirs,              
+        wd_labels=wd_labels,
+        wd_dirs=wd_dirs,
     )
 
-# views.py
+
+'''@app.route("/wind_tide_dir.html")
+def wind_tide_dir():
+    import pandas as pd
+    # naive UTC timestamps (match df.index dtype)
+    end_ts   = pd.Timestamp.utcnow()
+    start_ts = end_ts - pd.Timedelta(hours=8)
+
+    source = request.args.get("source")
+
+    if source == "pred_cresc":
+        # bypass Pearl and read pred_cresc directly
+        res = wind_data_functionsc.fetch_pred_cres_data(start_utc, end_utc, sheet_name="pred_cresc")
+        source_sheet = "pred_cresc"
+    else:
+        # normal behavior: Pearl first, fallback to pred_cresc
+        res, source_sheet = wind_data_functionsc.fetch_auto_pearl_then_pred(start_utc, end_utc)
+
+    # (optional) safety:
+    if not (isinstance(res, tuple) and len(res) == 6):
+        res = (None, None, None, None, [], [])
+
+    avg_wind_spd, wind_max, wind_min, avg_wind_dir, labels, series = res
+
+    return render_template(
+        "wind_tide_dir.html",
+        avg_wind_spd=avg_wind_spd,
+        wind_max=wind_max,
+        wind_min=wind_min,
+        avg_wind_dir=avg_wind_dir,
+        labels=labels,
+        series=series,
+        source_sheet=source_sheet,
+    )'''
+
 
 def fetch_winds(hours: int):
     """
@@ -230,109 +252,6 @@ def graph_8hr():
     return winds(8)
 
 
-'''@app.route("/graph_1hr")
-def graph_1hr():
-    (
-        avg_wind_spd,
-        wind_max,
-        wind_min,
-        avg_wind_dir,
-        date_time_index_series_str,
-        wind_spd_series,
-    ) = wind_data_functionsc.pearl_1hr_quik()
-
-    return render_template(
-        "graph_temp.html",
-        labels=date_time_index_series_str,
-        values=wind_spd_series,
-        past_hour_avg_wind_spd=avg_wind_spd,
-        past_hour_avg_wind_min=wind_min,
-        past_hour_avg_wind_max=wind_max,
-        avg_wind_dir=avg_wind_dir,
-    )
-
-
-@app.route("/graph_3hr")
-def graph_3hr():
-    (
-        avg_wind_spd,
-        wind_max,
-        wind_min,
-        avg_wind_dir,
-        date_time_index_series_str,
-        wind_spd_series,
-    ) = wind_data_functionsc.pearl_3hr_quik()
-
-
-    # Round/format for display
-    past_hour_avg_wind_spd_disp = round(avg_wind_spd, 1)  # keep one decimal
-    past_hour_avg_wind_max_disp = int(round(wind_max))
-    past_hour_avg_wind_min_disp = int(round(wind_min))
-    avg_wind_dir_disp = int(round(avg_wind_dir))
-
-    return render_template(
-    "graph_3hr.html",
-    labels=date_time_index_series_str,
-    values=wind_spd_series,
-    past_hour_avg_wind_spd=past_hour_avg_wind_spd_disp,
-    past_hour_avg_wind_max=past_hour_avg_wind_max_disp,
-    past_hour_avg_wind_min=past_hour_avg_wind_min_disp,
-    avg_wind_dir=avg_wind_dir_disp,
-    )
-
-
-@app.route("/graph_8hr")
-def graph_8hr():
-    (
-        avg_wind_spd,
-        wind_max,
-        wind_min,
-        avg_wind_dir,
-        date_time_index_series_str,
-        wind_spd_series,
-    ) = wind_data_functionsc.pearl_8hr_quik()
-
-    # Round/format for display
-    past_hour_avg_wind_spd_disp = round(avg_wind_spd, 1)  # keep one decimal
-    past_hour_avg_wind_max_disp = int(round(wind_max))
-    past_hour_avg_wind_min_disp = int(round(wind_min))
-    avg_wind_dir_disp = int(round(avg_wind_dir))
-
-    return render_template(
-    "graph_3hr.html",
-    labels=date_time_index_series_str,
-    values=wind_spd_series,
-    past_hour_avg_wind_spd=past_hour_avg_wind_spd_disp,
-    past_hour_avg_wind_max=past_hour_avg_wind_max_disp,
-    past_hour_avg_wind_min=past_hour_avg_wind_min_disp,
-    avg_wind_dir=avg_wind_dir_disp,
-    )'''
-
-'''@app.route("/windput", methods=["POST", "GET"])
-# takes the post intputs fromer user on windput page makes them into session variables
-def windput():
-    if request.method == "POST":
-        # getting form data and saving as session variables
-        req = request.form
-        # print(req)
-        sessiondatetime = request.form["sessiondatetime"]
-        # print(type(sessiondatetime))
-        session["sessiondatetime"] = sessiondatetime
-
-        # sessiondatetime_str = datetime.strftime(sessiondatetime)
-        # session["sessiondatetime_str"] = sessiondatetime_str
-        # print(session["sessiondatetime_str"])
-
-        duration = request.form["duration"]
-        session["duration"] = duration
-        # print(session['duration'])
-
-        return wind()
-        # return render_template("windput.html",form = form)
-
-    else:
-        return_val = render_template("windput.html")
-        return return_val'''
 
 from datetime import datetime
 

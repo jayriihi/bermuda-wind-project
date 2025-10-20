@@ -115,7 +115,7 @@ def fetch_pred_cres_data(string_start_time=None, string_end_time=None, sheet_nam
         return None, None, None, None, [], []
 
     df.set_index('Date/Time', inplace=True)
-    df.rename(columns={'Date/Time':'date_time'}, inplace=True)
+    df.rename(columns={'Date/Time':'date_time'}, inplace=True)  
     df.index = pd.to_datetime(df.index)
 
     start_time_dt = pd.to_datetime(string_start_time)
@@ -133,14 +133,51 @@ def fetch_pred_cres_data(string_start_time=None, string_end_time=None, sheet_nam
     series = sesh["wind_spd"].tolist()
     return avg_wind_spd, wind_max, wind_min, avg_wind_dir, labels, series
 
+# ---- toggle (top of wind_data_functionsc.py is fine) ----
+USE_PRED_ONLY = True   # set False when Pearl is healthy again
+
+
 def fetch_auto_pearl_then_pred(start=None, end=None):
+    import pandas as pd
+
+    def as_naive(ts):
+        if ts is None:
+            return None
+        t = pd.to_datetime(ts, errors="coerce")
+        if pd.isna(t):
+            return None
+        return t.tz_localize(None) if getattr(t, "tzinfo", None) else t
+
+    now = pd.Timestamp.utcnow()
+    end = as_naive(end or now)
+    start = as_naive(start or (end - pd.Timedelta(hours=8)))
+
+    def ok(res):
+        return (
+            isinstance(res, tuple) and len(res) == 6 and
+            res[0] is not None and res[5] and len(res[5]) > 0
+        )
+
+    if USE_PRED_ONLY:
+        res = fetch_pred_cres_data(start, end, sheet_name="pred_cresc")
+        return (res if ok(res) else (None, None, None, None, [], [])), "pred_cresc"
+
+    res = fetch_pred_cres_data(start, end, sheet_name="Pearl")
+    if ok(res) and not is_stale_wind(res[5]):
+        return res, "Pearl"
+
+    res2 = fetch_pred_cres_data(start, end, sheet_name="pred_cresc")
+    return (res2 if ok(res2) else (None, None, None, None, [], [])), "pred_cresc"
+
+
+'''def fetch_auto_pearl_then_pred(start=None, end=None):
     res = fetch_pred_cres_data(start, end, sheet_name="Pearl")
     avg, mx, mn, d, labels, series = res
     if (avg is not None) and series and not is_stale_wind(series):
         return res, "Pearl"
 
     # fallback
-    return fetch_pred_cres_data(start, end, sheet_name="pred_cresc"), "pred_cresc"
+    return fetch_pred_cres_data(start, end, sheet_name="pred_cresc"), "pred_cresc"'''
 
 def get_sesh_wind(datetimelocal_str, duration_str):
     string_start_time, string_end_time, h, m, sesh_start_date_str, sesh_start_time_str = \
