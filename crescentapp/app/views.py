@@ -6,8 +6,13 @@ from app import app
 from app.modules import wind_data_functionsc, tide_now, sesh_tide, tidal_data_retrieval
 
 
+@app.route("/")
+@app.route("/home")
+def homepage():
+    return redirect("/winds/1")
 
 
+'''
 @app.route("/")
 @app.route("/home")
 def homepage():
@@ -104,7 +109,7 @@ def homepage():
         wd_labels=wd_labels,
         wd_dirs=wd_dirs,
     )
-
+'''
 
 '''@app.route("/wind_tide_dir.html")
 def wind_tide_dir():
