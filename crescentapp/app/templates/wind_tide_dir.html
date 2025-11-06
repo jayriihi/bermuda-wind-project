@@ -830,6 +830,9 @@ body  { background: var(--bg) !important; }
     const QUARTER = 15 * 60 * 1000;
     const yMaxSnap = new Date(Math.ceil(yMaxRaw.getTime()/QUARTER)*QUARTER);
     const yMinSnap = new Date(yMaxSnap.getTime() - 3*60*60*1000);
+    const FIVE_MIN = 5 * 60 * 1000;
+    const yMinVis  = new Date(yMinSnap.getTime() - FIVE_MIN); // small top headroom
+
 
     // x span based on spread
     const PAD=5, maxAbs = deltas.length ? Math.max(...deltas.map(Math.abs)) : 50;
@@ -891,7 +894,7 @@ body  { background: var(--bg) !important; }
         type: 'time',
         reverse: true,
         offset: true,
-        min: yMinSnap,
+        min: yMinVis,
         max: yMaxSnap,
         time: {
           unit: 'minute',
