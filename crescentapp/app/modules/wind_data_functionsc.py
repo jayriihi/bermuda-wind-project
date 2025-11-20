@@ -170,15 +170,6 @@ def fetch_auto_pearl_then_pred(start=None, end=None):
     return (res2 if ok(res2) else (None, None, None, None, [], [])), "pred_cresc"
 
 
-'''def fetch_auto_pearl_then_pred(start=None, end=None):
-    res = fetch_pred_cres_data(start, end, sheet_name="Pearl")
-    avg, mx, mn, d, labels, series = res
-    if (avg is not None) and series and not is_stale_wind(series):
-        return res, "Pearl"
-
-    # fallback
-    return fetch_pred_cres_data(start, end, sheet_name="pred_cresc"), "pred_cresc"'''
-
 def get_sesh_wind(datetimelocal_str, duration_str):
     string_start_time, string_end_time, h, m, sesh_start_date_str, sesh_start_time_str = \
         format_date_time(datetimelocal_str, duration_str)
@@ -192,44 +183,6 @@ def get_sesh_wind(datetimelocal_str, duration_str):
 
     return (string_start_time, string_end_time, h, m, sesh_start_date_str, sesh_start_time_str,
             avg_wind_spd, wind_max, wind_min, avg_wind_dir, labels, series)
-
-
-'''    #new version of get_sesh_wind which switches to pred_cres if cres is down
-def get_sesh_wind(datetimelocal_str, duration_str):
-    string_start_time, string_end_time, h, m, sesh_start_date_str, sesh_start_time_str = format_date_time(datetimelocal_str, duration_str)
-
-    # Try retrieving Crescent data first
-    avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series = data_frame_set(string_start_time, string_end_time)
-
-    # If data fetch failed or session is empty
-    if any(x is None for x in [avg_wind_spd, wind_max, wind_min, avg_wind_dir]) or not wind_spd_series:
-        print("Crescent data fetch failed or session is empty. Falling back to predicted Crescent...")
-        avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series = fetch_pred_cres_data(string_start_time, string_end_time)
-
-    # If fallback also fails, return safe values to prevent crashing
-    if any(x is None for x in [avg_wind_spd, wind_max, wind_min, avg_wind_dir]) or not wind_spd_series:
-        print("Both data sources failed. Returning empty result.")
-        return string_start_time, string_end_time, h, m, sesh_start_date_str, sesh_start_time_str, None, None, None, None, [], []
-
-    # Check data integrity from Crescent before accepting it
-    window_size = 5
-    wind_speeds = wind_spd_series[-window_size:]
-    counted = Counter(wind_speeds)
-    most_common_count = max(counted.values()) if wind_speeds else 0
-
-    is_crescent_valid = most_common_count < 3
-
-    print("Using data source:", "Predicted Crescent" if not is_crescent_valid else "Crescent")
-
-    if not is_crescent_valid:
-        print("Crescent data appears to be stale. Switching to predicted Crescent...")
-        avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series = fetch_pred_cres_data(string_start_time, string_end_time)
-
-        if any(x is None for x in [avg_wind_spd, wind_max, wind_min, avg_wind_dir]) or not wind_spd_series:
-            print("Fallback also failed. Returning empty result.")
-            return string_start_time, string_end_time, h, m, sesh_start_date_str, sesh_start_time_str, None, None, None, None, [], []
-
-    return string_start_time, string_end_time, h, m, sesh_start_date_str, sesh_start_time_str, avg_wind_spd, wind_max, wind_min, avg_wind_dir, date_time_index_series_str, wind_spd_series'''
 
 
 def get_timezone_now():
