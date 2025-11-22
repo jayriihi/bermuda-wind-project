@@ -61,9 +61,9 @@ im = Image.open(filename, mode='r')
 
 # Setting the points for cropped image wind speed
 left = 980
-top = 82
+top = 75
 right =1140
-bottom = 112
+bottom = 95
 
 # Cropped image of above dimension 
 # (It will not change orginal image) 
@@ -107,9 +107,9 @@ recent_ws = num_ws[0]  # Assign the first value to recent_ws
 
 #Setting the points for cropped image max wind speed
 left = 980
-top = 315
+top = 440
 right =1140
-bottom = 338
+bottom = 460
 
 # Cropped image of above dimension 
 # (It will not change orginal image) 
@@ -158,9 +158,9 @@ recent_mws = num_mws[0]
 
 # Setting the points for cropped image wind direction 
 left = 980
-top = 535
+top = 257
 right =1140
-bottom = 565
+bottom = 277
 
 # Cropped image of above dimension 
 # (It will not change orginal image) 
@@ -240,7 +240,7 @@ latest_rows = [sheet.row_values(i) for i in range(4, 7)]
 valid_rows = [row for row in latest_rows if len(row) >= 4 and all(row[1:])]
 
 # Simulate using pred_cresc for testing (Set to True to force pred_cresc)
-force_pred_cresc = True  # Change to True to force the script to act as if Crescent is offline
+force_pred_cresc = False  # Change to True to force the script to act as if Crescent is offline
 
 # Fetch the latest three rows from Crescent sheet (rows 4, 5, and 6)
 latest_rows = [sheet.row_values(i) for i in range(4, 7)]
@@ -258,13 +258,18 @@ def is_crescent_offline(rows, recent_ws, recent_mws, recent_wd):
         for row in rows
     )
 
+# --- Default values for Windguru payload (will be set below) ---
+windguru_ws = None
+windguru_mws = None
+windguru_wd = None
+
 # Check if Crescent data is offline or if we are forcing pred_cresc
 crescent_is_offline = is_crescent_offline(valid_rows, recent_ws, recent_mws, recent_wd) or force_pred_cresc
 
 if crescent_is_offline:
     print("Crescent data appears to be offline OR force_pred_cresc is enabled. Fetching pred_cresc data.")
 
-    # Access pred_cres sheet and fetch the latest row
+    # Access pred_cresc sheet and fetch the latest row
     pred_sheet = client.open("crescent_data").worksheet("pred_cresc")
     latest_pred_row = pred_sheet.row_values(4)
 
@@ -272,6 +277,7 @@ if crescent_is_offline:
     if len(latest_pred_row) < 4 or not all(latest_pred_row[1:]):
         print("⚠️ Error: pred_cresc row 4 is missing or incomplete. Skipping Windguru update.")
         pred_ws, pred_mws, pred_wd = None, None, None
+        # windguru_* stay as None so we can detect and skip below
     else:
         # Use pred_cresc data for Windguru API ONLY
         pred_ws = float(latest_pred_row[1])
@@ -280,51 +286,54 @@ if crescent_is_offline:
 
         print(f"Using pred_cresc data for Windguru: {pred_ws}, {pred_mws}, {pred_wd}")
 
-    # 🚨 Ensure Windguru receives pred_cresc values when Crescent is offline
-    # 🚨 Force Windguru to always use pred_cresc values (no Crescent fallback)
+        # Windguru uses pred_cresc values when Crescent is offline
         windguru_ws = pred_ws
         windguru_mws = pred_mws
         windguru_wd = pred_wd
 
-
-    # 🚨 STILL WRITE CRESCENT DATA TO SHEET1 (duplicate entry) for views.py outage detection
+    # STILL WRITE CRESCENT DATA TO SHEET1 for outage detection
     data_row_add = [now_time_gsheet, recent_ws, recent_mws, recent_wd]
-    sheet.insert_row(data_row_add, 4)  # ✅ Ensures repeated data is written for `views.py` to detect
+    sheet.insert_row(data_row_add, 4)
     print("Offline Crescent data written to Sheet1 for redundancy.")
-    
+
 else:
     print("Crescent data is online. Storing in Crescent sheet.")
 
-    # **Only insert real Crescent data into Google Sheets**
+    # Only insert real Crescent data into Google Sheets
     data_row_add = [now_time_gsheet, recent_ws, recent_mws, recent_wd]
-    sheet.insert_row(data_row_add, 4)  # ✅ Writes only once when Crescent is online.
+    sheet.insert_row(data_row_add, 4)
 
-    '''
-    # 🚨 Ensure Windguru receives Crescent values when online
+    # Windguru receives Crescent values when online
     windguru_ws = recent_ws
     windguru_mws = recent_mws
     windguru_wd = recent_wd
-    '''
 
-# 🚨 Print the final values being sent to Windguru
-print(f"Data being sent to Windguru (Crescent or pred_cresc): Avg Wind Speed: {windguru_ws}, Max Wind Speed: {windguru_mws}, Wind Direction: {windguru_wd}")
+# --- Windguru section ---
 
-# Creating URL for Windguru API
-str2hash = f"{now_time}crescent_bermudacrescentstation*"
-result = hashlib.md5(str2hash.encode())
-hash_value = result.hexdigest()
+if windguru_ws is None or windguru_mws is None or windguru_wd is None:
+    print("⚠️ No valid data available for Windguru (Crescent and/or pred_cresc unavailable). Skipping Windguru update.")
+else:
+    print(
+        f"Data being sent to Windguru (Crescent or pred_cresc): "
+        f"Avg Wind Speed: {windguru_ws}, Max Wind Speed: {windguru_mws}, Wind Direction: {windguru_wd}"
+    )
 
-# Send data to Windguru
-URL = (
-    f"http://www.windguru.cz/upload/api.php?"
-    f"uid=crescent_bermuda&salt={now_time}&hash={hash_value}&"
-    f"wind_avg={windguru_ws}&wind_max={windguru_mws}&wind_direction={windguru_wd}"
-)
+    # Creating URL for Windguru API
+    str2hash = f"{now_time}crescent_bermudacrescentstation*"
+    result = hashlib.md5(str2hash.encode())
+    hash_value = result.hexdigest()
 
-try:
-    response = requests.get(URL)
-    print(f"Windguru API Response: {response.status_code}")
-except Exception as e:
-    print(f"Error occurred while sending data to Windguru: {e}")
+    URL = (
+        f"http://www.windguru.cz/upload/api.php?"
+        f"uid=crescent_bermuda&salt={now_time}&hash={hash_value}&"
+        f"wind_avg={windguru_ws}&wind_max={windguru_mws}&wind_direction={windguru_wd}"
+    )
+
+    try:
+        response = requests.get(URL)
+        print(f"Windguru API Response: {response.status_code}")
+    except Exception as e:
+        print(f"Error occurred while sending data to Windguru: {e}")
+
 
 
