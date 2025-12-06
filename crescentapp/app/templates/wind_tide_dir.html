@@ -585,7 +585,7 @@ body  { background: var(--bg) !important; }
   // range flags from Jinja
   const H       = {{ H }};                                   // already set at top
   const isLong  = {{ (H >= 3) | tojson }};
-  const TENSION = {{ (0.25 if H >= 8 else 0.35) | tojson }};
+  const TENSION = 0.3;
 
   // data (use tojson, not |safe)
   const labels = {{ labels | tojson }};
@@ -625,7 +625,9 @@ body  { background: var(--bg) !important; }
       backgroundColor: 'rgba(0,225,209,.15)',
       pointBackgroundColor: AQUA,
       borderWidth: 2,
-      tension: TENSION
+      tension: TENSION,
+      pointRadius: 2,
+      pointHoverRadius: 3
     }]
   };
 
