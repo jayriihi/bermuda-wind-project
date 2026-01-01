@@ -2,16 +2,19 @@ import requests
 import pandas as pd
 import datetime as dt
 from datetime import timedelta, datetime
+from zoneinfo import ZoneInfo
 
 
+
+
+BERMUDA_TZ = ZoneInfo("Atlantic/Bermuda")
 
 
 def format_date_time():
-
-    now = datetime.now()
-    string_now = dt.datetime.strftime(now,"%Y-%m-%dT%H:%M")
-    #create datetime objecet from datetime-local string from html input
-    sesh_start_datetime = dt.datetime.strptime(string_now, '%Y-%m-%dT%H:%M')
+    # Use Bermuda local time to align with NOAA lst_ldt timestamps.
+    now = datetime.now(BERMUDA_TZ).replace(tzinfo=None)
+    string_now = dt.datetime.strftime(now, "%Y-%m-%dT%H:%M")
+    sesh_start_datetime = now
     #convert to date str and start time str
     sesh_start_date_str = dt.datetime.strftime(sesh_start_datetime, '%d %b')
     sesh_start_time_str = dt.datetime.strftime(sesh_start_datetime, '%-I:%M %p')
@@ -29,7 +32,7 @@ def format_date_time():
     #print(string_start_time)
     #string_end_time = dt.datetime.strftime(sesh_end_time,"%H:%M")
 
-    sesh_date = datetime.date(sesh_start_datetime)
+    sesh_date = sesh_start_datetime.date()
     #print(string_end_time)
 
     return string_start_time,  sesh_start_date_str, sesh_start_time_str, sesh_start_datetime, sesh_date, string_now
@@ -40,7 +43,7 @@ def get_tide_data_for_now():
 
     #get next date for retrieving tide data for sesh day plus the next
 
-    sesh_date = datetime.date(sesh_start_datetime)
+    sesh_date = sesh_start_datetime.date()
     sesh_date_str = sesh_date.strftime('%Y%m%d')
     #print(sesh_date_str)
     prior_date = sesh_date + timedelta(days=-1)
@@ -152,5 +155,3 @@ def get_tide_data_for_now():
 
 
 '''print(get_tide_data_for_now())'''
-
-
