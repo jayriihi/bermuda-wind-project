@@ -146,24 +146,14 @@ def wind_tide_dir():
     )'''
 
 
-def fetch_winds(hours: int):
+def fetch_winds(hours: int, station_key=None):
     """
-    Use your existing helpers:
-      pearl_1hr_quik(), pearl_3hr_quik(), pearl_8hr_quik()
-    Fall back to _pearl_quik(hours) if a wrapper isn't present.
     Returns (labels, values, avg, maxv, minv, dirv).
     """
-    # Try the explicit wrapper first, e.g. pearl_3hr_quik
-    fn = getattr(wind_data_functionsc, f"pearl_{hours}hr_quik", None)
-
-    if fn is not None:
-        avg, maxv, minv, dirv, labels, series = fn()
-    elif hasattr(wind_data_functionsc, "_pearl_quik"):
-        # Generic path with hours
-        avg, maxv, minv, dirv, labels, series = wind_data_functionsc._pearl_quik(hours)
-    else:
-        # Absolute fallback so the page still renders
-        avg, maxv, minv, dirv, labels, series = wind_data_functionsc.pearl_1hr_quik()
+    avg, maxv, minv, dirv, labels, series = wind_data_functionsc.get_wind_data(
+        hours,
+        station_key=station_key,
+    )
 
     # Template expects labels/values plus summary numbers
     return labels, series, avg, maxv, minv, dirv
@@ -188,7 +178,19 @@ def _fmt_hhmm(x):
 
 @app.route("/winds/<int:hours>")
 def winds(hours: int):
-    labels, values, avg, maxv, minv, dirv = fetch_winds(hours)
+    raw_station = request.args.get("station")
+    station_key = wind_data_functionsc.resolve_station_key(raw_station)
+    station_param = raw_station if raw_station in wind_data_functionsc.STATIONS else None
+    station_label = wind_data_functionsc.STATIONS[station_key]["label"]
+    stations = [
+        {"key": key, "label": meta["label"]}
+        for key, meta in wind_data_functionsc.STATIONS.items()
+    ]
+
+    labels, values, avg, maxv, minv, dirv = fetch_winds(
+        hours,
+        station_key=station_key,
+    )
 
     tide_ok = True
     tide_error_msg = None
@@ -218,7 +220,9 @@ def winds(hours: int):
 
         # ---- 3h wind direction for vertical chart (safe + JSON-friendly) ----
     try:
-        wd_labels_raw, wd_dirs_raw = wind_data_functionsc.wind_dir_3hours()
+        wd_labels_raw, wd_dirs_raw = wind_data_functionsc.wind_dir_3hours(
+            station_key=station_key
+        )
         wd_labels = [str(t) for t in wd_labels_raw]                 # strings/ISO ok
         wd_dirs   = [float(d) for d in wd_dirs_raw if d is not None]  # 0–360 floats
     except Exception as e:
@@ -228,6 +232,10 @@ def winds(hours: int):
     return render_template(
         "wind_tide_dir.html",
         hours=hours,
+        station_key=station_key,
+        station_label=station_label,
+        station_param=station_param,
+        stations=stations,
         labels=labels,
         values=values,
         past_hour_avg_wind_spd=avg,

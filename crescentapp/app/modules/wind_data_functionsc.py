@@ -10,6 +10,30 @@ from collections import Counter
 bda_tz = pytz.timezone('Atlantic/Bermuda')
 uk_tz = pytz.timezone('Europe/London')
 
+# Station mapping for multi-source wind data
+STATIONS = {
+    "pearl":    {"label": "Pearl",        "sheet": "Pearl"},
+    "crescent": {"label": "Crescent",     "sheet": "Sheet1"},
+    "nmb":      {"label": "NMB",          "sheet": "NMB_data"},
+    "model":    {"label": "Cresc. model", "sheet": "pred_cresc"},
+}
+DEFAULT_STATION_KEY = "pearl"
+
+def resolve_station_key(station_key):
+    if not station_key:
+        return DEFAULT_STATION_KEY
+    key = str(station_key).lower()
+    return key if key in STATIONS else DEFAULT_STATION_KEY
+
+def get_wind_data(hours, station_key=None):
+    station_key = resolve_station_key(station_key)
+    sheet_name = STATIONS[station_key]["sheet"]
+    now_bda = get_timezone_now()
+    start_bda = now_bda - timedelta(hours=hours)
+    start = start_bda.strftime("%Y-%m-%d %H:%M")
+    end   = now_bda.strftime("%Y-%m-%d %H:%M")
+    return fetch_pred_cres_data(start, end, sheet_name=sheet_name)
+
 def is_stale_wind(series, window=5, threshold=3, decimals=1):
     if not series or len(series) < window:
         return False
@@ -242,7 +266,7 @@ def fetch_sheet_window_df(string_start_time=None, string_end_time=None, sheet_na
     return sesh.sort_index()
 
 # 3 hour df for wind_dir.html / wind_dir_vert.html chart
-def wind_dir_3hours():
+def wind_dir_3hours(station_key=None):
     # Bermuda window
     now_bda = get_timezone_now()
     start = (now_bda - timedelta(hours=3, minutes=5)).strftime("%Y-%m-%d %H:%M")
@@ -250,7 +274,13 @@ def wind_dir_3hours():
 
     print(f"[wind_dir_3hours] window BDA: {start} → {end}")
 
-    df = fetch_sheet_window_df(start, end, sheet_name="pred_cresc").sort_index()
+    if station_key is None:
+        sheet_name = "pred_cresc"
+    else:
+        station_key = resolve_station_key(station_key)
+        sheet_name = STATIONS[station_key]["sheet"]
+
+    df = fetch_sheet_window_df(start, end, sheet_name=sheet_name).sort_index()
     print(f"[wind_dir_3hours] fetched rows: {len(df)}")
     if df.empty:
         print("[wind_dir_3hours] empty slice")
@@ -323,8 +353,6 @@ def wind_direction_change_6hour():
     initial_dir = float(df["wind_dir"].iloc[0])
     final_dir   = float(df["wind_dir"].iloc[-1])
     return _dir_delta(initial_dir, final_dir)
-
-
 
 
 

@@ -44,13 +44,51 @@ h1::after{
   margin: 0 0 2px;
   line-height: 1.12;
 }
-.periodMenu p a[href="/crescent"]{
+.periodMenu .station-select{
+  position: relative;
+  display: inline-block;
+}
+.periodMenu .station-toggle{
+  border: 0;
+  background: transparent;
   color: var(--muted);
   font-weight: 600;
-  text-decoration: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
-.periodMenu p a[href="/crescent"]:hover{
+.periodMenu .station-toggle:hover{
   text-decoration: underline;
+}
+.periodMenu .station-menu{
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  background: #fff;
+  border: 1px solid rgba(37, 52, 74, .2);
+  border-radius: 8px;
+  min-width: 150px;
+  box-shadow: 0 8px 20px rgba(0,0,0,.12);
+  z-index: 20;
+  display: none;
+}
+.periodMenu .station-menu.open{
+  display: block;
+}
+.periodMenu .station-menu a{
+  display: block;
+  padding: 6px 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: .92rem;
+  white-space: nowrap;
+}
+.periodMenu .station-menu a:hover{
+  background: #f2f5f8;
 }
 
 /* Segmented control */
@@ -523,11 +561,26 @@ body  { background: var(--bg) !important; }
 <div class="page-wrap">
   <div class="periodMenu">
     <center>
-      <p>Recent winds at <a href="/crescent">Crescent</a></p>
+      <p>
+        Recent winds at
+        <span class="station-select">
+          <button class="station-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+            {{ station_label }} <span class="chev">▾</span>
+          </button>
+          <div class="station-menu" role="menu">
+            {% for station in stations %}
+              <a role="menuitem" href="{{ url_for('winds', hours=H, station=station.key) }}">{{ station.label }}</a>
+            {% endfor %}
+          </div>
+        </span>
+      </p>
       <div class="btn-group">
-        <a class="btn btn-primary {{ 'active' if H==1 else '' }}" href="{{ url_for('winds', hours=1) }}">1 hour</a>
-        <a class="btn btn-primary {{ 'active' if H==3 else '' }}" href="{{ url_for('winds', hours=3) }}">3 hours</a>
-        <a class="btn btn-primary {{ 'active' if H==8 else '' }}" href="{{ url_for('winds', hours=8) }}">8 hours</a>
+        <a class="btn btn-primary {{ 'active' if H==1 else '' }}"
+           href="{{ url_for('winds', hours=1, station=station_key) if station_param else url_for('winds', hours=1) }}">1 hour</a>
+        <a class="btn btn-primary {{ 'active' if H==3 else '' }}"
+           href="{{ url_for('winds', hours=3, station=station_key) if station_param else url_for('winds', hours=3) }}">3 hours</a>
+        <a class="btn btn-primary {{ 'active' if H==8 else '' }}"
+           href="{{ url_for('winds', hours=8, station=station_key) if station_param else url_for('winds', hours=8) }}">8 hours</a>
       </div>
     </center>
   </div>
@@ -573,6 +626,32 @@ body  { background: var(--bg) !important; }
 
 <script>
   const DPR = Math.min(2, window.devicePixelRatio || 1);
+</script>
+
+<script>
+  (function() {
+    const toggle = document.querySelector(".station-toggle");
+    const menu = document.querySelector(".station-menu");
+    if (!toggle || !menu) return;
+
+    function closeMenu() {
+      menu.classList.remove("open");
+      toggle.setAttribute("aria-expanded", "false");
+    }
+
+    toggle.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const isOpen = menu.classList.toggle("open");
+      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+
+    menu.addEventListener("click", function(e) {
+      e.stopPropagation();
+    });
+
+    document.addEventListener("click", closeMenu);
+  })();
 </script>
 
 <script>
