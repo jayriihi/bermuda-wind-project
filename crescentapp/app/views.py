@@ -191,6 +191,7 @@ def winds(hours: int):
         hours,
         station_key=station_key,
     )
+    latest_wind_spd = values[-1] if values else None
 
     tide_ok = True
     tide_error_msg = None
@@ -241,6 +242,7 @@ def winds(hours: int):
         past_hour_avg_wind_spd=avg,
         past_hour_avg_wind_max=maxv,
         past_hour_avg_wind_min=minv,
+        past_hour_latest_wind_spd=latest_wind_spd,
         avg_wind_dir=dirv,
         tide_ok=tide_ok,
         tide_error_msg=tide_error_msg,
