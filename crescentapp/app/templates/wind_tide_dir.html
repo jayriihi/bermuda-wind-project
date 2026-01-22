@@ -349,12 +349,20 @@ h1::after{
 .meta{ opacity:.9; font-size:.95rem; display:flex; gap:10px; align-items:center; }
 .badge{ padding:2px 8px; border-radius:999px; font-size:.75rem; border:1px solid var(--aqua); color:var(--aqua); }
 
-/* --- Stat row: 4-up desktop, single-row swipe on mobile --- */
+/* --- Stat row: 3-up desktop, stacked on mobile --- */
 .stat-grid{
   display: grid;
-  grid-template-columns: repeat(4, 1fr);  /* always 4 across */
+  grid-template-columns: repeat(3, 1fr);  /* always 3 across */
   gap: 10px;                               /* tighter gap */
   margin-top: 12px;
+}
+
+@media (max-width: 900px){
+  .stat-grid{ grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px){
+  .stat-grid{ grid-template-columns: 1fr; }
 }
 
 .stat{
@@ -371,19 +379,11 @@ h1::after{
 }
 
 .stat .value{
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   letter-spacing: -0.01em;
   font-size: clamp(0.95rem, 3.0vw, 1.35rem); /* scales down on small screens */
-}
-
-/* Make units smaller so numbers stay readable */
-.stat .value .u{
-  font-weight: 700;
-  opacity: .9;
-  font-size: .82em;                         /* e.g., “kt”, “°” slightly smaller */
-  margin-left: 2px;
 }
 
 /* Slight extra squeeze for small phones */
@@ -392,20 +392,6 @@ h1::after{
   .stat{ padding: 7px 8px; border-radius: 9px; }
   .stat .label{ font-size: .68rem; }
   .stat .value{ font-size: clamp(0.9rem, 3.2vw, 1.2rem); }
-}
-
-/* Last-resort fallback: horizontal scroll only on very narrow devices */
-@media (max-width: 340px){
-  .stat-grid{
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;                       /* enable swipe only here */
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 6px;
-    scroll-snap-type: x proximity;
-  }
-  .stat{ flex: 0 0 160px; scroll-snap-align: start; }
-  .stat .value{ font-size: 0.98rem; }
 }
 
 
@@ -597,10 +583,19 @@ body  { background: var(--bg) !important; }
     </div>
 
     <div class="stat-grid">
-      <div class="stat"><div class="label">Avg</div><div class="value">{{ past_hour_avg_wind_spd|round(1) }} kt</div></div>
-      <div class="stat"><div class="label">Max</div><div class="value">{{ past_hour_avg_wind_max|round(1) }} kt</div></div>
-      <div class="stat"><div class="label">Latest</div><div class="value">{{ past_hour_latest_wind_spd|round(1) }} kt</div></div>
-      <div class="stat"><div class="label">Dir (avg)</div><div class="value">{{ avg_wind_dir }}°</div></div>
+      {% set dir_cur = (wd_dirs|last) if wd_dirs else None %}
+      <div class="stat">
+        <div class="label">Spd</div>
+        <div class="value">Cur {{ past_hour_latest_wind_spd|round(1) }} kts&nbsp;&nbsp;&nbsp;Avg {{ past_hour_avg_wind_spd|round(1) }} kts</div>
+      </div>
+      <div class="stat">
+        <div class="label">Spd</div>
+        <div class="value">Max {{ past_hour_avg_wind_max|round(1) }} kts&nbsp;&nbsp;&nbsp;Min {{ past_hour_avg_wind_min|round(1) }} kts</div>
+      </div>
+      <div class="stat">
+        <div class="label">Dir</div>
+        <div class="value">Cur {{ dir_cur|round(0)|int if dir_cur is not none else "—" }}°&nbsp;&nbsp;&nbsp;Avg {{ avg_wind_dir|round(0)|int if avg_wind_dir is not none else "—" }}°</div>
+      </div>
     </div>
 
     <div class="chart-wrap">
