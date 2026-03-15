@@ -7,11 +7,11 @@ from typing import List
 
 # -------- Config --------
 SPREADSHEET_NAME = "crescent_data"
-TABS: List[str] = ["NMB_data", "pred_cresc", "Pearl"]  # order doesn't matter
+TABS: List[str] = ["NMB_data", "pred_cresc", "Pearl", "Sheet1"]  # order doesn't matter
 HEADER_ROWS = 3                 # you keep headers in rows 1–3
 DATE_COL = "Date/Time"         # exact header text in row 3
-CUTOFF_YEAR = 2025             # keep rows >= this year
-DRY_RUN = False                # True = no writes, just CSVs + console
+KEEP_YEAR = 2026  # keep rows from this year and newer; archive anything older
+DRY_RUN = True                # True = no writes, just CSVs + console
 CHUNK_ROWS = 1000              # chunk writes to avoid API size limits
 # ------------------------
 
@@ -20,7 +20,10 @@ scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
-creds_path = Path(__file__).resolve().parents[1] / "crescent_scraper" / "creds.json"
+creds_path = Path(__file__).resolve().parents[1] / "scrapers" / "crescent_scraper" / "creds.json"
+print("Using creds path:", creds_path.resolve())
+if not creds_path.exists():
+    raise FileNotFoundError(f"Missing Google service account credentials file: {creds_path.resolve()}")
 creds = ServiceAccountCredentials.from_json_keyfile_name(str(creds_path), scope)
 client = gspread.authorize(creds)
 
@@ -46,27 +49,45 @@ def process_tab(ss, tab_name: str):
 
     # Frame the data for filtering
     df = pd.DataFrame(data_rows, columns=headers)
-    # guard against entirely empty sheets
     if df.empty:
         print("No data rows; nothing to do.")
         return
 
     # Parse Date/Time
-    df[DATE_COL] = pd.to_datetime(df[DATE_COL], errors="coerce")
+    raw_dt = df[DATE_COL].astype(str).str.strip()
+    df[DATE_COL] = pd.to_datetime(raw_dt, errors="coerce")
 
-    # Archive < CUTOFF_YEAR
-    to_archive = df[df[DATE_COL].dt.year < CUTOFF_YEAR]
-    keep_df    = df[df[DATE_COL].dt.year >= CUTOFF_YEAR]
+    year_counts = df[DATE_COL].dt.year.value_counts(dropna=False).sort_index()
+    print("Year counts:", year_counts.to_dict())
+    print("Unparseable Date/Time rows (NaT):", int(df[DATE_COL].isna().sum()))
 
-    print(f"Rows total: {len(df)} | archive: {len(to_archive)} | keep: {len(keep_df)}")
+    # 👉 ADD THIS BLOCK HERE
+    bad_dt = df[df[DATE_COL].isna()]
+    if len(bad_dt) > 0:
+        bad_csv = f"bad_datetime_{tab_name}.csv"
+        bad_dt.to_csv(bad_csv, index=False)
+        print(f"⚠️ Wrote {len(bad_dt)} rows with unparseable Date/Time to {bad_csv}")
+
+    # Now filter
+    year = df[DATE_COL].dt.year
+    to_archive = df[year < KEEP_YEAR]
+    keep_df    = df[(year >= KEEP_YEAR) | (df[DATE_COL].isna())]
+
+
+    # Keep rows from KEEP_YEAR and newer; archive anything older
+    to_archive = df[df[DATE_COL].dt.year < KEEP_YEAR]
+    keep_df    = df[df[DATE_COL].dt.year >= KEEP_YEAR]
+
+
+    print(f"Rows total: {len(df)} | archived: {len(to_archive)} | kept: {len(keep_df)}")
 
     # Save archive CSV (even in dry run—it’s safe and handy)
-    out_csv = f"archive_{tab_name}_pre_{CUTOFF_YEAR}.csv"
+    out_csv = f"archive_{tab_name}_pre_{KEEP_YEAR}.csv"
     if len(to_archive) > 0:
-        to_archive.to_csv(out_csv, index=False)
+        to_archive.reindex(columns=headers).to_csv(out_csv, index=False)
         print(f"📁 Wrote {len(to_archive)} rows to {out_csv}")
     else:
-        print("📁 Nothing to archive for this tab.")
+        print("Nothing to archive for this tab.")
 
     if DRY_RUN:
         print("🧪 DRY RUN: skipping sheet writes.")
@@ -75,21 +96,22 @@ def process_tab(ss, tab_name: str):
     # Re-build values matrix: first 3 header rows + kept rows
     new_values = values[:HEADER_ROWS] + keep_df.astype(str).values.tolist()
 
-    # Clear + chunked update (avoid 10MB payload issues)
-    print(f"🧹 Clearing '{tab_name}' and writing {len(keep_df)} kept rows...")
-    sh.clear()
+    # Clear data region only (preserves header rows and formatting), then chunked update.
+    used_col_count = max((len(r) for r in values), default=len(headers))
+    used_col_count = max(used_col_count, len(headers), 1)
+    first_data_row = HEADER_ROWS + 1
+    last_used_row = len(values)
+    if last_used_row >= first_data_row:
+        clear_range = f"A{first_data_row}:{gspread.utils.rowcol_to_a1(last_used_row, used_col_count)}"
+        print(f"🧹 Clearing data values in '{tab_name}' range {clear_range} and writing {len(keep_df)} kept rows...")
+        sh.batch_clear([clear_range])
+    else:
+        print(f"🧹 No existing data rows to clear in '{tab_name}'; writing {len(keep_df)} kept rows...")
 
-    if not new_values:
-        print("Nothing to write after clear (unexpected).")
-        return
-
-    # Write headers first (HEADER_ROWS rows)
-    sh.update(f"A1:{gspread.utils.rowcol_to_a1(HEADER_ROWS, len(new_values[0]))}", new_values[:HEADER_ROWS])
-
-    # Then write data in chunks starting after header rows
+    # Write kept data in chunks starting after header rows
     start_row = HEADER_ROWS + 1
     data_matrix = new_values[HEADER_ROWS:]
-    col_count = len(new_values[0])
+    col_count = len(headers)
 
     for idx, block in enumerate(chunked(data_matrix, CHUNK_ROWS), start=1):
         end_row = start_row + len(block) - 1
